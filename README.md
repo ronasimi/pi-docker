@@ -86,7 +86,7 @@ The repo installs `pi-mcp-adapter` on first boot and reads `config/mcp.json` fro
 
 Configured endpoints:
 
-- `http://mcp-gateway:8888/mcp/` — SearXNG
+- `http://mcp-searxng:8888/mcp/` — SearXNG
 - `http://mcp-gateway:8931/mcp` — Playwright
 - `http://mcp-gateway:8932/mcp` — Memory
 
@@ -214,3 +214,15 @@ docker compose restart pi
 ```
 
 Or regenerate the catalog explicitly with `./scripts/sync-models.sh` and then restart Pi if the UI was already running.
+
+## MCP v11 endpoint split
+
+With `mcp-gateway-v11`, SearXNG is exposed directly from the upstream container to avoid double-proxy 403 failures:
+
+```text
+SearXNG MCP     http://mcp-searxng:8888/mcp/
+Playwright MCP  http://mcp-gateway:8931/mcp
+Memory MCP      http://mcp-gateway:8932/mcp
+```
+
+The SearXNG `search` tool remains the only pinned direct MCP tool; Playwright and Memory remain discovery-only.

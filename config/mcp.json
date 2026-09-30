@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "searxng": {
-      "url": "http://mcp-gateway:8888/mcp/",
+      "url": "http://mcp-searxng:8888/mcp/",
       "directTools": [
         "search"
       ],
