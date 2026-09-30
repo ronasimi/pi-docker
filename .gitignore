@@ -6,4 +6,4 @@ data/pi/*
 !data/pi/.gitkeep
 data/web/*
 !data/web/.gitkeep
-
+**/node_modules/

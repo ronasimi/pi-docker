@@ -34,14 +34,12 @@ if ! jq -e '.providers.ollama.models | type == "array" and length > 0' "$MODELS_
   fi
 fi
 
-# Seed the MCP adapter into persistent Pi data. A registry/network failure here
-# should degrade MCP capability, not take down the Web UI in a restart loop.
-SETTINGS="$PI_CODING_AGENT_DIR/settings.json"
-if ! jq -e '.packages // [] | index("npm:pi-mcp-adapter") != null' "$SETTINGS" >/dev/null 2>&1; then
-  log "Installing token-efficient MCP adapter into persistent Pi data..."
-  if ! pi install npm:pi-mcp-adapter; then
-    warn "pi-mcp-adapter installation failed; Web UI will still start. Retry later with: pi install npm:pi-mcp-adapter"
-  fi
+# Dependencies are baked into the image. No npm installation during startup.
+# A malformed state file must be fixed, not silently overwritten or allowed to
+# launch the old unbounded tool surface. Backups are made before migration.
+if ! node /usr/local/lib/pi-docker/configure-tool-policy.mjs; then
+  warn "Tool policy migration failed. Check settings/client-state JSON and permissions; original files are preserved."
+  exit 1
 fi
 
 if [[ $# -eq 0 ]]; then

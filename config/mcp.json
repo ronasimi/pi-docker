@@ -2,9 +2,7 @@
   "mcpServers": {
     "searxng": {
       "url": "http://mcp-searxng:8888/mcp/",
-      "directTools": [
-        "search"
-      ],
+      "directTools": false,
       "exposeResources": false,
       "requestTimeoutMs": 30000,
       "searchKeywords": {
@@ -22,7 +20,7 @@
           "url"
         ]
       },
-      "lifecycle": "keep-alive"
+      "lifecycle": "lazy"
     },
     "playwright": {
       "url": "http://mcp-gateway:8931/mcp",
@@ -30,17 +28,25 @@
       "exposeResources": false,
       "requestTimeoutMs": 60000,
       "searchKeywords": {
-        "*": [
-          "browser",
-          "web",
-          "navigate",
+        "browser_navigate": [
+          "browse",
+          "read",
           "page",
           "website",
           "url",
-          "read page",
-          "click",
-          "form",
-          "screenshot"
+          "live",
+          "headlines",
+          "navigate"
+        ],
+        "browser_snapshot": [
+          "read",
+          "text",
+          "page",
+          "snapshot"
+        ],
+        "browser_take_screenshot": [
+          "screenshot",
+          "image"
         ]
       },
       "lifecycle": "lazy"
@@ -68,13 +74,18 @@
     "directTools": false,
     "namespaceProxyTools": false,
     "allowInstall": false,
-    "scriptMode": true,
+    "scriptMode": false,
     "exposeResources": false,
     "hostConfigDiscovery": "off",
     "warnOnLargeDirectTools": true,
     "toolResultRendering": "compact",
     "freezeDirectTools": true,
     "strictDirectToolArguments": true,
-    "deferWithMissingMetadata": false
+    "deferWithMissingMetadata": false,
+    "outputGuard": {
+      "maxBytes": 12288,
+      "maxLines": 300,
+      "detailsMaxBytes": 2048
+    }
   }
 }

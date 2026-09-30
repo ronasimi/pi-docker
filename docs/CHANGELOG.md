@@ -1,0 +1,24 @@
+# Bounded MCP routing update — 2026-09-30
+
+## Diagnosis
+
+The supplied CBC session began with 12,070 input tokens. It exposed SearXNG directly, accepted section/search-result titles as five current headlines, and then called Pi Web UI's `browser_page` twice even though its page-picker bridge was unpaired. Playwright existed behind MCP but was never discovered. The final search also failed across upstream search engines.
+
+## Changes
+
+- Six stable model-facing tools: four Pi core tools plus bounded MCP search and invocation.
+- Disabled all optional Web UI tools and package resources; removed the direct SearXNG pin and MCP scripting exposure.
+- Enforced the allowlist both in Web UI tool gating and Pi execution hooks. Existing more restrictive presets remain effective.
+- Required successful discovery before MCP invocation. Discovery returns up to three complete schemas and never registers additional native tools.
+- Preserved adapter transport handling, JSON-schema validation, configured approvals, and output guards.
+- Added per-turn search/call budgets, a bounded discovery cache, duplicate result suppression, and repeated-failure/no-progress guards.
+- Routed page-reading/headline tasks to live Playwright snapshots and instructed the model to distinguish search snippets from current article evidence.
+- Pinned package versions and installed adapter dependencies during image build. Settings migration is backed up and idempotent.
+
+## Validation
+
+14 regression tests passed, including a real Pi 0.99.1 SDK, adapter 4.0.0, an HTTP MCP fixture, and a streaming OpenAI-compatible provider fixture. Every captured model request contained exactly the six intended schemas. The fixture proved that undiscovered and invalid calls are errors, repeated failures are blocked, only valid calls reach MCP, and discovery grants reset for a new user turn. Other checks cover bounds, offline metadata, Web UI reactivation, restrictive presets, state preservation, and corrupt JSON handling.
+
+Docker is unavailable in the editing workspace. The full image build, real Ollama/Gemma behavior, live CBC access, and latency/token improvements require verification on the host. Prompt instructions improve routing and evidence handling but do not guarantee model accuracy.
+
+Suggested commit message: `fix: gate non-core tools behind bounded MCP discovery`

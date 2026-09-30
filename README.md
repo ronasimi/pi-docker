@@ -1,228 +1,102 @@
-# Pi Docker
+# Pi Docker: core tools and bounded MCP
 
-Standalone containerized Pi + `pi-web-ui` project. It does **not** run Ollama or the MCP services itself.
+Containerized Pi + Pi Web UI, using your existing Ollama and MCP services.
 
-## Architecture
+## Tool surface
+
+The model receives exactly these tools in the standard agent preset:
+
+| Tool | Purpose |
+|---|---|
+| `read`, `write`, `edit`, `bash` | Core local file and shell operations |
+| `mcp_search` | Discover up to three matching MCP schemas |
+| `mcp_call` | Invoke an exact discovered MCP tool |
+
+All optional Pi Web UI tools are disabled, including `browser_page`, subagents, terminal helpers, skills, scheduling, and direct MCP tools. Installed optional Pi packages are retained but their extensions, skills, and prompts are disabled. The original settings are backed up. The Web UI remains available; this changes the model's tools.
+
+The MCP adapter runs behind the gate. Its generic `mcp`, scripting tool, and direct server tools are never registered into the model's tool list. The separate built-in Pi MCP/codemode/tool-search extensions are disabled to avoid duplicate surfaces. Web UI gating and a Pi execution hook also reject optional tools that another extension tries to expose.
+
+Existing restrictive agent/permission presets continue to apply. Use the standard agent preset for all six tools; an existing chat in an ask/minimal/code preset can intentionally expose fewer tools. A read-only permission preset is not changed by this update. MCP server permissions and approvals remain those of the adapter/server; discovery is a routing gate, not an authorization mechanism.
+
+## MCP workflow
+
+For capabilities outside exposed native tools:
 
 ```text
-Browser :8787
-     |
-     v
-Pi + pi-web-ui container
-     |-- host.docker.internal:11434 --> existing Ollama container
-     `-- ai-local -------------------> mcp-gateway container
-                                       |-- SearXNG MCP :8888
-                                       |-- Playwright MCP :8931
-                                       `-- Memory MCP :8932
+mcp_search({query: "browser_navigate", server: "playwright"})
+mcp_call({tool: "<exact returned name>", args: {url: "https://www.cbc.ca/news"}})
 ```
 
-## Repository state layout
+Use the actual name returned by search. The model must not issue it as a native function. A named-page/headline request routes to Playwright and reads the live snapshot. SearXNG provides web search; search snippets alone do not prove which headlines are latest.
 
-```text
-pi-docker/
-├── config/          # version-controlled provider/MCP configuration
-├── data/
-│   ├── pi/          # durable Pi settings, packages, sessions
-│   └── web/         # durable pi-web-ui state
-└── scripts/
-```
+| Bound | Value |
+|---|---:|
+| Search results | Default and maximum 3 |
+| Search response | At most 16 KiB, complete schemas only |
+| Retained discovered tools | 8 per user turn, oldest evicted first |
+| Search calls | 6 per user turn |
+| MCP executions | 24 per user turn |
+| MCP text result guard | 12 KiB / 300 lines; full output spills to a local file |
 
-## What this repo does
+Search accepts a server filter, a smaller limit, and an offset. Oversized schemas are reported and never silently truncated into a callable tool. MCP metadata is cached by the adapter; discovery grants reset at the next user turn. Repeating a failed call with identical arguments is blocked. Two identical successful outputs also block a third identical call to stop loops without progress. This guard is local to one user turn.
 
-- Runs Pi and `pi-web-ui` entirely in Docker.
-- Publishes the UI only on `127.0.0.1:8787` by default.
-- Mounts `~/Projects` at `/workspace`.
-- Persists Pi sessions/settings in the host-visible `./data/pi/` bind mount.
-- Persists Web UI state in the host-visible `./data/web/` bind mount.
-- Connects to the already-running Ollama server through `host.docker.internal:11434`.
-- Uses 64K Ollama aliases for the two Gemma 4 QAT models.
-- Connects to the separate `mcp-gateway` container through the external `ai-local` network.
-- Pins only SearXNG `search` as a direct MCP tool for reliable live-web routing; Playwright and Memory stay proxy-only to avoid prompt-schema bloat.
-- Mounts a short global `APPEND_SYSTEM.md` that makes MCP discovery the first route for live web, browser, and durable-memory tasks.
-- Installs `pi-mcp-adapter` into the persistent Pi volume on first boot.
+Discovery uses the adapter's local keyword ranking; it does not call a second model, Jev, or an embedding service. No complete MCP catalog is injected into the standing prompt. Large previous conversations can still carry old schemas/results: start a new chat after upgrading.
 
-## Requirements
+## Requirements and startup
 
-- Docker Engine + Compose plugin
-- Existing Ollama container publishing host port `11434`
-- These source models already pulled in Ollama:
-  - `gemma4:e2b-it-qat`
-  - `gemma4:e4b-it-qat`
-- `~/Projects/mcp-gateway` is optional but expected for MCP search/browser/memory tools.
-
-## First start
+- Docker Engine and Compose plugin
+- Existing Ollama publishing host port 11434
+- MCP gateway running on the external Docker network `ai-local`
+- Optional Gemma source models `gemma4:e2b-it-qat` and `gemma4:e4b-it-qat` for the existing 64K alias initialization
 
 ```bash
 cd ~/Projects/pi-docker
 ./scripts/init.sh
 ```
 
-The init script:
+Open http://127.0.0.1:8787. The image pins Pi 0.99.1, Pi Web UI 0.96.1, and MCP adapter 4.0.0. The Web UI's bundled Pi SDK is pinned as well. Existing `.env` pins override Compose defaults; the bundled upgrade installer updates these two pins.
 
-1. creates `.env` from `.env.example` if necessary;
-2. ensures the shared `ai-local` Docker network exists;
-3. creates the external `ai-local` Docker network if missing;
-4. creates lightweight Ollama aliases with `num_ctx=65536`;
-5. builds and starts the Pi/Web UI container.
+Dependencies are installed at image build time. Container startup only applies the settings migration and synchronizes Ollama models. Model discovery failures keep the last valid model catalog. Invalid settings JSON stops startup with an explicit error rather than silently starting the old tool surface.
 
-Open:
+## Endpoints
 
-```text
-http://127.0.0.1:8787
-```
+| Service | Container URL |
+|---|---|
+| Ollama | `http://host.docker.internal:11434` |
+| SearXNG MCP | `http://mcp-searxng:8888/mcp/` |
+| Playwright MCP | `http://mcp-gateway:8931/mcp` |
+| Memory MCP | `http://mcp-gateway:8932/mcp` |
 
-## Why the `-64k` model aliases exist
+Edit `config/mcp.json` to add configured MCP servers. Per-server `disabled` flags and adapter approval configuration are respected. The gate always forces direct tools, MCP scripting, and automatic host-config imports off. Resources are not exposed in this tool-only profile.
 
-Pi's `contextWindow: 65536` is metadata used for its own budgeting. The OpenAI-compatible Ollama API has no request field for changing the runtime context size. Ollama therefore needs a model created with `PARAMETER num_ctx 65536` as well. The aliases created by `scripts/configure-ollama-64k.sh` ensure both layers agree.
+## State and model configuration
 
-The aliases reuse the existing model layers; they do not make another full 4.3/6.1 GB copy of the weights.
+- `data/pi` contains persistent Pi settings, packages, and sessions.
+- `data/web` contains Web UI state.
+- `~/Projects` is mounted at `/workspace`.
+- `config/APPEND_SYSTEM.md` contains routing instructions.
+- `config/models-overrides.json` retains your model metadata overrides.
 
-The two `-64k` Gemma aliases are created automatically when their source models are present. They are then discovered like every other installed Ollama model.
-When a `-64k` alias exists, its unmodified source model is hidden from Pi by default so model-selection fallback does not silently switch back to the lower-runtime-context source entry. Set `PI_OLLAMA_HIDE_ALIAS_SOURCES=false` to show both.
+Ollama model discovery and the existing 64K aliases are unchanged. On startup, `/api/tags` and `/api/show` generate the model catalog; `PI_OLLAMA_CONTEXT_CAP` defaults to 65536 and `PI_OLLAMA_MAX_TOKENS` to 4096. The provider's context metadata does not itself change Ollama's runtime context; the existing alias script does that.
 
-## MCP
+Settings backups are `data/pi/agent/settings.json.before-mcp-gate` and `data/web/client-state.json.before-mcp-gate`. Migration is idempotent and preserves chats, model settings, and permission presets. Use `scripts/migrate-volumes-to-bind.sh` first if migrating from older named volumes.
 
-The repo installs `pi-mcp-adapter` on first boot and reads `config/mcp.json` from the container-global MCP config path.
-
-Configured endpoints:
-
-- `http://mcp-searxng:8888/mcp/` — SearXNG
-- `http://mcp-gateway:8931/mcp` — Playwright
-- `http://mcp-gateway:8932/mcp` — Memory
-
-SearXNG pins only its `search` tool directly, so the small Gemma model sees an explicit `searxng_search` function for current web/news requests. Playwright and Memory remain proxy-only behind `mcp`/`mcpScript`. This adds only one MCP schema to the standing prompt instead of all server schemas.
-
-The repo also mounts `config/APPEND_SYSTEM.md` at `~/.pi/agent/APPEND_SYSTEM.md`. It tells the model to check MCP before shell/network fallbacks for live web, public browser, and memory tasks. This preserves Pi's normal system prompt and only appends routing policy. Restart/recreate the Pi session after changing it so the new prompt is loaded.
-
-With MCP gateway v10, Pi uses the trusted `ai-local` endpoints directly. The private upstream SearXNG container is not host-published and does not need a separate application-level API key.
-
-SearXNG uses a keep-alive MCP connection so its direct search metadata is ready before normal use. Playwright and Memory remain lazy. If the gateway is temporarily unavailable, Pi still starts; the adapter can reconnect later.
-
-
-## Reliable live-web tool routing
-
-`config/mcp.json` deliberately pins only the SearXNG `search` tool as a direct Pi tool. This avoids the failure mode where a small model sees only the generic `mcp` gateway, overlooks it, and incorrectly claims that live web access is unavailable. The direct tool is normally exposed as `searxng_search`.
-
-The global routing prompt requires `searxng_search` for current/news/headline requests when it is present. The generic `mcp` gateway remains available for Playwright, Memory, discovery, and fallback.
-
-The adapter uses `lifecycle: keep-alive` for SearXNG and `freezeDirectTools: true` so the hot-path schema stays stable after initial discovery, improving prompt-cache stability.
-
-## Useful commands
+## Verify
 
 ```bash
-# Start/rebuild
-docker compose up -d --build
-
-# Logs
-docker compose logs -f pi
-
-# Status/connectivity
 ./scripts/status.sh
-
-# Open a Pi CLI in the same persistent configuration
-docker compose exec pi pi
-
-# Shell
-docker compose exec pi bash
-
-# Stop
-docker compose down
+# Local regression suite (includes a real Pi SDK and mock HTTP MCP/provider):
+cd extensions/mcp-gate
+npm ci --ignore-scripts
+npm test
 ```
 
-## Update Pi or the Web UI
+To also test the Web UI patch and state migration, set `PI_WEB_PACKAGE_DIR` to an installed Pi Web UI 0.96.1 directory after running `scripts/patch-web-tool-policy.mjs` against it. The image applies that patch during build and fails if upstream source no longer matches.
 
-Edit `.env` and rebuild. For example:
+Start a **new chat** and ask:
 
-```text
-PI_VERSION=latest
-PI_WEB_UI_VERSION=0.96.1
-```
+> Browse https://www.cbc.ca/news and read five current article headlines. Use MCP discovery, open the live page, and give article links. Do not substitute search snippets for the page.
 
-Then:
+Expected: `mcp_search` → `mcp_call`; no `browser_page`, direct `searxng_search`, or `mcpScript`. If a gateway is unavailable, the response should identify that server's connection error.
 
-```bash
-docker compose build --pull --no-cache
-docker compose up -d
-```
-
-`pi-web-ui` embeds its own Pi SDK, so update the Web UI package itself when you want its SDK updated too.
-
-## Container user
-
-The image reuses the UID/GID 1000 account already provided by the official Node image, renaming `node:node` to `pi:pi` and moving its home to `/home/pi`. This avoids UID/GID collisions while keeping bind-mounted files owned by the normal desktop user on typical Linux installations.
-
-## Persistent state
-
-Pi and Web UI state are ordinary host directories:
-
-```text
-data/pi/   -> /home/pi/.pi
-data/web/  -> /home/pi/.pi-web
-```
-
-They survive container recreation and image rebuilds and can be inspected or backed up directly. Runtime contents are ignored by Git.
-
-### Migrating an older named-volume installation
-
-If you already used the previous repo version, run this **before** starting the bind-mount version:
-
-```bash
-./scripts/migrate-volumes-to-bind.sh
-```
-
-The script copies `pi-docker_pi_data` and `pi-docker_pi_web_data` into `data/pi/` and `data/web/` but deliberately leaves the old volumes intact until you verify the new container.
-
-### Reset container state
-
-```bash
-docker compose down
-rm -rf data/pi/* data/web/*
-mkdir -p data/pi/agent data/web
-./scripts/init.sh
-```
-
-This does not touch Ollama models or the MCP gateway repo.
-
-## Restart-loop protection
-
-Container startup treats Ollama discovery and first-boot MCP adapter installation as recoverable. A transient Ollama/npm failure no longer exits PID 1 and triggers `restart: unless-stopped`; the Web UI starts with the last known-good model catalog, or the bundled two-Gemma fallback on first boot.
-
-For startup diagnostics:
-
-```bash
-./scripts/logs.sh
-```
-
-It prints Docker restart/exit state and the last 200 Pi log lines.
-
-## Automatic Ollama model discovery
-
-Pi no longer has a static model list. On every `pi` container start, `scripts/sync-ollama-models.mjs` reads Ollama's `/api/tags`, optionally enriches incomplete entries with `/api/show`, and atomically regenerates:
-
-```text
-data/pi/agent/models.json
-```
-
-All installed Ollama models are listed. Native context is capped by `PI_OLLAMA_CONTEXT_CAP` (default 65536) to avoid accidentally requesting oversized contexts on local hardware. Vision and thinking flags are inferred from Ollama capabilities. Per-model metadata can be overridden in `config/models-overrides.json`.
-
-After pulling a new model, restart Pi to refresh the selector:
-
-```bash
-docker exec ollama ollama pull <model>
-cd ~/Projects/pi-docker
-docker compose restart pi
-```
-
-Or regenerate the catalog explicitly with `./scripts/sync-models.sh` and then restart Pi if the UI was already running.
-
-## MCP v11 endpoint split
-
-With `mcp-gateway-v11`, SearXNG is exposed directly from the upstream container to avoid double-proxy 403 failures:
-
-```text
-SearXNG MCP     http://mcp-searxng:8888/mcp/
-Playwright MCP  http://mcp-gateway:8931/mcp
-Memory MCP      http://mcp-gateway:8932/mcp
-```
-
-The SearXNG `search` tool remains the only pinned direct MCP tool; Playwright and Memory remain discovery-only.
+See `docs/CHANGELOG.md` for the diagnosis and validation limits.

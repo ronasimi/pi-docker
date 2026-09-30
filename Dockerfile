@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 
-ARG PI_VERSION=latest
+ARG PI_VERSION=0.99.1
 ARG PI_WEB_UI_VERSION=0.96.1
 
 RUN apt-get update && \
@@ -9,6 +9,7 @@ RUN apt-get update && \
       python3 make g++ && \
     npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}" && \
     npm install -g "pi-web-ui@${PI_WEB_UI_VERSION}" && \
+    npm install --prefix /usr/local/lib/node_modules/pi-web-ui --ignore-scripts --omit=dev --no-save "@earendil-works/pi-coding-agent@${PI_VERSION}" && \
     rm -rf /root/.npm /var/lib/apt/lists/*
 
 # node:22-bookworm-slim already provides node:node at UID/GID 1000.
@@ -25,6 +26,11 @@ RUN set -eux; \
 
 COPY --chown=pi:pi scripts/container-entrypoint.sh /usr/local/bin/pi-container-entrypoint
 COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-ollama-models.mjs
+COPY scripts/patch-web-tool-policy.mjs scripts/configure-tool-policy.mjs /usr/local/lib/pi-docker/
+COPY extensions/mcp-gate/package*.json /opt/pi-mcp-gate/
+RUN cd /opt/pi-mcp-gate && npm ci --ignore-scripts --omit=dev --no-audit --no-fund
+COPY extensions/mcp-gate/index.ts extensions/mcp-gate/gate.mjs /opt/pi-mcp-gate/
+RUN node /usr/local/lib/pi-docker/patch-web-tool-policy.mjs /usr/local/lib/node_modules/pi-web-ui
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
 USER pi
