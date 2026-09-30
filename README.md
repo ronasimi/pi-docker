@@ -38,6 +38,7 @@ pi-docker/
 - Uses 64K Ollama aliases for the two Gemma 4 QAT models.
 - Connects to the separate `mcp-gateway` container through the external `ai-local` network.
 - Keeps MCP tools proxy-only (`directTools: false`) to avoid prompt-schema bloat.
+- Mounts a short global `APPEND_SYSTEM.md` that makes MCP discovery the first route for live web, browser, and durable-memory tasks.
 - Installs `pi-mcp-adapter` into the persistent Pi volume on first boot.
 
 ## Requirements
@@ -94,6 +95,8 @@ Configured endpoints:
 - `http://mcp-gateway:8932/mcp` — Memory
 
 All three use `directTools: false`. Pi sees the small generic `mcp`/`mcpScript` gateway instead of injecting every MCP schema into every model request.
+
+The repo also mounts `config/APPEND_SYSTEM.md` at `~/.pi/agent/APPEND_SYSTEM.md`. It tells the model to check MCP before shell/network fallbacks for live web, public browser, and memory tasks. This preserves Pi's normal system prompt and only appends routing policy. Restart/recreate the Pi session after changing it so the new prompt is loaded.
 
 With MCP gateway v9, Pi does not carry the SearXNG API key. The gateway injects it only on its private backend connection, while Pi uses the trusted `ai-local` endpoints directly.
 

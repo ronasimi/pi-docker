@@ -33,6 +33,7 @@ services:
       # Version-controlled provider and MCP configuration.
       - ./config/models.json:/home/pi/.pi/agent/models.json:ro
       - ./config/mcp.json:/home/pi/.config/mcp/mcp.json:ro
+      - ./config/APPEND_SYSTEM.md:/home/pi/.pi/agent/APPEND_SYSTEM.md:ro
       # Let Pi work directly on the host Projects tree.
       - ${HOME}/Projects:/workspace
 
