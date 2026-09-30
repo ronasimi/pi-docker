@@ -1,2 +1,9 @@
 .env
 *.log
+
+# Runtime state is durable on the host but not committed.
+data/pi/*
+!data/pi/.gitkeep
+data/web/*
+!data/web/.gitkeep
+

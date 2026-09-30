@@ -28,10 +28,9 @@ services:
       MCP_GATEWAY_AUTH_TOKEN: ${MCP_GATEWAY_AUTH_TOKEN:-}
 
     volumes:
-      # Pi sessions/settings/packages survive image rebuilds.
-      - pi_data:/home/pi/.pi
-      # Web UI state, themes, uploads, etc.
-      - pi_web_data:/home/pi/.pi-web
+      # Host-visible durable state. These directories are created by scripts/init.sh.
+      - ./data/pi:/home/pi/.pi
+      - ./data/web:/home/pi/.pi-web
       # Version-controlled provider and MCP configuration.
       - ./config/models.json:/home/pi/.pi/agent/models.json:ro
       - ./config/mcp.json:/home/pi/.config/mcp/mcp.json:ro
@@ -47,10 +46,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-
-volumes:
-  pi_data:
-  pi_web_data:
 
 networks:
   ai-local:

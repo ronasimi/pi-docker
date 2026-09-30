@@ -15,13 +15,24 @@ Pi + pi-web-ui container
                                        `-- Playwright MCP :8931
 ```
 
+## Repository state layout
+
+```text
+pi-docker/
+├── config/          # version-controlled provider/MCP configuration
+├── data/
+│   ├── pi/          # durable Pi settings, packages, sessions
+│   └── web/         # durable pi-web-ui state
+└── scripts/
+```
+
 ## What this repo does
 
 - Runs Pi and `pi-web-ui` entirely in Docker.
 - Publishes the UI only on `127.0.0.1:8787` by default.
 - Mounts `~/Projects` at `/workspace`.
-- Persists Pi sessions/settings in a Docker volume.
-- Persists Web UI state in a separate Docker volume.
+- Persists Pi sessions/settings in the host-visible `./data/pi/` bind mount.
+- Persists Web UI state in the host-visible `./data/web/` bind mount.
 - Connects to the already-running Ollama server through `host.docker.internal:11434`.
 - Uses 64K Ollama aliases for the two Gemma 4 QAT models.
 - Connects to the separate `mcp-gateway` container through the external `ai-local` network.
@@ -124,18 +135,34 @@ docker compose up -d
 
 `pi-web-ui` embeds its own Pi SDK, so update the Web UI package itself when you want its SDK updated too.
 
-## Reset container state
+## Persistent state
 
-Stop first:
+Pi and Web UI state are ordinary host directories:
+
+```text
+data/pi/   -> /home/pi/.pi
+data/web/  -> /home/pi/.pi-web
+```
+
+They survive container recreation and image rebuilds and can be inspected or backed up directly. Runtime contents are ignored by Git.
+
+### Migrating an older named-volume installation
+
+If you already used the previous repo version, run this **before** starting the bind-mount version:
+
+```bash
+./scripts/migrate-volumes-to-bind.sh
+```
+
+The script copies `pi-docker_pi_data` and `pi-docker_pi_web_data` into `data/pi/` and `data/web/` but deliberately leaves the old volumes intact until you verify the new container.
+
+### Reset container state
 
 ```bash
 docker compose down
+rm -rf data/pi/* data/web/*
+mkdir -p data/pi/agent data/web
+./scripts/init.sh
 ```
 
-Remove only Pi/Web UI state (does not touch Ollama models or the MCP repo):
-
-```bash
-docker volume rm pi-docker_pi_data pi-docker_pi_web_data
-```
-
-Then rerun `./scripts/init.sh`.
+This does not touch Ollama models or the MCP gateway repo.
