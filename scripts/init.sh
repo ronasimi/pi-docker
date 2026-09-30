@@ -12,7 +12,7 @@ if [[ $(id -u) -eq 0 ]]; then
   chown -R 1000:1000 data/pi data/web
 fi
 
-# MCP gateway v9 exposes trusted client endpoints directly on ai-local;
+# MCP gateway v10 exposes trusted client endpoints directly on ai-local;
 # its SearXNG API key stays private between gateway containers.
 
 if ! docker network inspect ai-local >/dev/null 2>&1; then

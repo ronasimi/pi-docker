@@ -7,6 +7,7 @@ const overridesPath = process.env.PI_MODELS_OVERRIDES || '/etc/pi/models-overrid
 const contextCap = Math.max(2048, Number(process.env.PI_OLLAMA_CONTEXT_CAP || 65536));
 const maxTokensDefault = Math.max(256, Number(process.env.PI_OLLAMA_MAX_TOKENS || 4096));
 const retrySeconds = Math.max(0, Number(process.env.PI_OLLAMA_DISCOVERY_RETRY_SECONDS || 30));
+const hideAliasSources = !['0', 'false', 'no'].includes(String(process.env.PI_OLLAMA_HIDE_ALIAS_SOURCES || 'true').toLowerCase());
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -111,15 +112,24 @@ async function main() {
     }
   }
 
+  const tagModels = (tags.models || []).filter(model => model?.name);
+  const names = new Set(tagModels.map(model => model.name));
+  const visibleTagModels = hideAliasSources
+    ? tagModels.filter(model => !names.has(`${model.name}-64k`))
+    : tagModels;
+
   const discovered = [];
-  for (const model of tags.models || []) {
-    if (!model?.name) continue;
+  for (const model of visibleTagModels) {
     const detected = await enrich(model);
     const override = overrides?.models?.[model.name] || overrides?.[model.name] || {};
     discovered.push({ ...detected, ...override, id: model.name });
   }
 
-  discovered.sort((a, b) => a.id.localeCompare(b.id));
+  discovered.sort((a, b) => {
+    const aAlias = a.id.endsWith('-64k') ? 0 : 1;
+    const bAlias = b.id.endsWith('-64k') ? 0 : 1;
+    return aAlias - bAlias || a.id.localeCompare(b.id);
+  });
   if (discovered.length === 0) {
     throw new Error('Ollama returned no installed models');
   }

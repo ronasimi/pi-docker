@@ -29,6 +29,7 @@ services:
       PI_OLLAMA_CONTEXT_CAP: ${PI_OLLAMA_CONTEXT_CAP:-65536}
       PI_OLLAMA_MAX_TOKENS: ${PI_OLLAMA_MAX_TOKENS:-4096}
       PI_OLLAMA_DISCOVERY_RETRY_SECONDS: ${PI_OLLAMA_DISCOVERY_RETRY_SECONDS:-30}
+      PI_OLLAMA_HIDE_ALIAS_SOURCES: ${PI_OLLAMA_HIDE_ALIAS_SOURCES:-true}
 
     volumes:
       # Host-visible durable state. These directories are created by scripts/init.sh.

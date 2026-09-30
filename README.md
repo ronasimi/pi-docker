@@ -37,7 +37,7 @@ pi-docker/
 - Connects to the already-running Ollama server through `host.docker.internal:11434`.
 - Uses 64K Ollama aliases for the two Gemma 4 QAT models.
 - Connects to the separate `mcp-gateway` container through the external `ai-local` network.
-- Keeps MCP tools proxy-only (`directTools: false`) to avoid prompt-schema bloat.
+- Pins only SearXNG `search` as a direct MCP tool for reliable live-web routing; Playwright and Memory stay proxy-only to avoid prompt-schema bloat.
 - Mounts a short global `APPEND_SYSTEM.md` that makes MCP discovery the first route for live web, browser, and durable-memory tasks.
 - Installs `pi-mcp-adapter` into the persistent Pi volume on first boot.
 
@@ -78,6 +78,7 @@ Pi's `contextWindow: 65536` is metadata used for its own budgeting. The OpenAI-c
 The aliases reuse the existing model layers; they do not make another full 4.3/6.1 GB copy of the weights.
 
 The two `-64k` Gemma aliases are created automatically when their source models are present. They are then discovered like every other installed Ollama model.
+When a `-64k` alias exists, its unmodified source model is hidden from Pi by default so model-selection fallback does not silently switch back to the lower-runtime-context source entry. Set `PI_OLLAMA_HIDE_ALIAS_SOURCES=false` to show both.
 
 ## MCP
 
@@ -89,13 +90,22 @@ Configured endpoints:
 - `http://mcp-gateway:8931/mcp` — Playwright
 - `http://mcp-gateway:8932/mcp` — Memory
 
-All three use `directTools: false`. Pi sees the small generic `mcp`/`mcpScript` gateway instead of injecting every MCP schema into every model request.
+SearXNG pins only its `search` tool directly, so the small Gemma model sees an explicit `searxng_search` function for current web/news requests. Playwright and Memory remain proxy-only behind `mcp`/`mcpScript`. This adds only one MCP schema to the standing prompt instead of all server schemas.
 
 The repo also mounts `config/APPEND_SYSTEM.md` at `~/.pi/agent/APPEND_SYSTEM.md`. It tells the model to check MCP before shell/network fallbacks for live web, public browser, and memory tasks. This preserves Pi's normal system prompt and only appends routing policy. Restart/recreate the Pi session after changing it so the new prompt is loaded.
 
 With MCP gateway v10, Pi uses the trusted `ai-local` endpoints directly. The private upstream SearXNG container is not host-published and does not need a separate application-level API key.
 
-If `mcp-gateway` is not running, Pi still starts because the MCP servers are lazy.
+SearXNG uses a keep-alive MCP connection so its direct search metadata is ready before normal use. Playwright and Memory remain lazy. If the gateway is temporarily unavailable, Pi still starts; the adapter can reconnect later.
+
+
+## Reliable live-web tool routing
+
+`config/mcp.json` deliberately pins only the SearXNG `search` tool as a direct Pi tool. This avoids the failure mode where a small model sees only the generic `mcp` gateway, overlooks it, and incorrectly claims that live web access is unavailable. The direct tool is normally exposed as `searxng_search`.
+
+The global routing prompt requires `searxng_search` for current/news/headline requests when it is present. The generic `mcp` gateway remains available for Playwright, Memory, discovery, and fallback.
+
+The adapter uses `lifecycle: keep-alive` for SearXNG and `freezeDirectTools: true` so the hot-path schema stays stable after initial discovery, improving prompt-cache stability.
 
 ## Useful commands
 

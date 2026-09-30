@@ -2,12 +2,27 @@
   "mcpServers": {
     "searxng": {
       "url": "http://mcp-gateway:8888/mcp/",
-      "directTools": false,
+      "directTools": [
+        "search"
+      ],
       "exposeResources": false,
       "requestTimeoutMs": 30000,
       "searchKeywords": {
-        "*": ["web", "search", "internet", "searxng", "news", "headlines", "latest", "current", "research", "site", "url"]
-      }
+        "*": [
+          "web",
+          "search",
+          "internet",
+          "searxng",
+          "news",
+          "headlines",
+          "latest",
+          "current",
+          "research",
+          "site",
+          "url"
+        ]
+      },
+      "lifecycle": "keep-alive"
     },
     "playwright": {
       "url": "http://mcp-gateway:8931/mcp",
@@ -15,8 +30,20 @@
       "exposeResources": false,
       "requestTimeoutMs": 60000,
       "searchKeywords": {
-        "*": ["browser", "web", "navigate", "page", "website", "url", "read page", "click", "form", "screenshot"]
-      }
+        "*": [
+          "browser",
+          "web",
+          "navigate",
+          "page",
+          "website",
+          "url",
+          "read page",
+          "click",
+          "form",
+          "screenshot"
+        ]
+      },
+      "lifecycle": "lazy"
     },
     "memory": {
       "url": "http://mcp-gateway:8932/mcp",
@@ -24,8 +51,17 @@
       "exposeResources": false,
       "requestTimeoutMs": 30000,
       "searchKeywords": {
-        "*": ["memory", "remember", "recall", "knowledge", "entity", "relation", "observation"]
-      }
+        "*": [
+          "memory",
+          "remember",
+          "recall",
+          "knowledge",
+          "entity",
+          "relation",
+          "observation"
+        ]
+      },
+      "lifecycle": "lazy"
     }
   },
   "settings": {
@@ -36,6 +72,9 @@
     "exposeResources": false,
     "hostConfigDiscovery": "off",
     "warnOnLargeDirectTools": true,
-    "toolResultRendering": "compact"
+    "toolResultRendering": "compact",
+    "freezeDirectTools": true,
+    "strictDirectToolArguments": true,
+    "deferWithMissingMetadata": false
   }
 }

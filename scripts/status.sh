@@ -38,3 +38,11 @@ echo
 echo '== MCP-first routing prompt =='
 docker compose exec -T pi bash -lc 'test -r "$PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" && echo "APPEND_SYSTEM.md loaded from $PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" || echo "APPEND_SYSTEM.md missing"' || true
 
+echo
+echo '== MCP routing configuration =='
+docker compose exec -T pi jq -r '
+  .mcpServers.searxng as $s |
+  "searxng lifecycle=\($s.lifecycle // \"lazy\") directTools=\($s.directTools|tojson)"
+' /home/pi/.config/mcp/mcp.json 2>/dev/null || true
+echo 'Expected hot-path direct tool: searxng_search'
+
