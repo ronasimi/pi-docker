@@ -1,0 +1,18 @@
+{
+  "models": {
+    "gemma4:e2b-it-qat-64k": {
+      "name": "Gemma 4 E2B QAT 64K",
+      "reasoning": true,
+      "input": ["text", "image"],
+      "contextWindow": 65536,
+      "maxTokens": 4096
+    },
+    "gemma4:e4b-it-qat-64k": {
+      "name": "Gemma 4 E4B QAT 64K",
+      "reasoning": true,
+      "input": ["text", "image"],
+      "contextWindow": 65536,
+      "maxTokens": 4096
+    }
+  }
+}

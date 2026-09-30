@@ -25,13 +25,19 @@ services:
       PI_WEB_HOST: 0.0.0.0
       PI_WEB_PORT: 8787
       PI_WEB_TOKEN: ${PI_WEB_TOKEN:-}
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      PI_OLLAMA_CONTEXT_CAP: ${PI_OLLAMA_CONTEXT_CAP:-65536}
+      PI_OLLAMA_MAX_TOKENS: ${PI_OLLAMA_MAX_TOKENS:-4096}
+      PI_OLLAMA_DISCOVERY_RETRY_SECONDS: ${PI_OLLAMA_DISCOVERY_RETRY_SECONDS:-30}
 
     volumes:
       # Host-visible durable state. These directories are created by scripts/init.sh.
       - ./data/pi:/home/pi/.pi
       - ./data/web:/home/pi/.pi-web
-      # Version-controlled provider and MCP configuration.
-      - ./config/models.json:/home/pi/.pi/agent/models.json:ro
+      # Pi models.json is generated from Ollama on every container start.
+      # Keep only small version-controlled per-model overrides here.
+      - ./config/models-overrides.json:/etc/pi/models-overrides.json:ro
+      - ./config/models-fallback.json:/etc/pi/models-fallback.json:ro
       - ./config/mcp.json:/home/pi/.config/mcp/mcp.json:ro
       - ./config/APPEND_SYSTEM.md:/home/pi/.pi/agent/APPEND_SYSTEM.md:ro
       # Let Pi work directly on the host Projects tree.

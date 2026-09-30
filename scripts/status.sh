@@ -30,7 +30,10 @@ done
 
 echo
 echo '== Pi models =='
-docker compose exec -T pi pi --list-models 2>/dev/null | grep -E 'ollama|gemma4' || true
+docker compose exec -T pi pi --list-models 2>/dev/null | grep -E 'ollama' || true
+echo
+echo '== Generated Ollama catalog =='
+docker compose exec -T pi jq -r '.providers.ollama.models[]? | "\(.id)  ctx=\(.contextWindow) reasoning=\(.reasoning) input=\(.input|join(","))"' /home/pi/.pi/agent/models.json 2>/dev/null || true
 echo
 echo '== MCP-first routing prompt =='
 docker compose exec -T pi bash -lc 'test -r "$PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" && echo "APPEND_SYSTEM.md loaded from $PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" || echo "APPEND_SYSTEM.md missing"' || true

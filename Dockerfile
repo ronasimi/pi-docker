@@ -20,10 +20,11 @@ RUN set -eux; \
     groupmod --new-name pi node; \
     test "$(id -u pi)" = "1000"; \
     test "$(id -g pi)" = "1000"; \
-    mkdir -p /workspace /home/pi/.pi/agent /home/pi/.pi-web /home/pi/.config/mcp; \
+    mkdir -p /workspace /home/pi/.pi/agent /home/pi/.pi-web /home/pi/.config/mcp /etc/pi; \
     chown -R pi:pi /workspace /home/pi
 
 COPY --chown=pi:pi scripts/container-entrypoint.sh /usr/local/bin/pi-container-entrypoint
+COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-ollama-models.mjs
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
 USER pi

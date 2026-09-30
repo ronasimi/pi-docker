@@ -77,12 +77,7 @@ Pi's `contextWindow: 65536` is metadata used for its own budgeting. The OpenAI-c
 
 The aliases reuse the existing model layers; they do not make another full 4.3/6.1 GB copy of the weights.
 
-Pi models:
-
-- `ollama/gemma4:e2b-it-qat-64k`
-- `ollama/gemma4:e4b-it-qat-64k`
-
-Both are configured for text + image input and thinking support.
+The two `-64k` Gemma aliases are created automatically when their source models are present. They are then discovered like every other installed Ollama model.
 
 ## MCP
 
@@ -98,7 +93,7 @@ All three use `directTools: false`. Pi sees the small generic `mcp`/`mcpScript` 
 
 The repo also mounts `config/APPEND_SYSTEM.md` at `~/.pi/agent/APPEND_SYSTEM.md`. It tells the model to check MCP before shell/network fallbacks for live web, public browser, and memory tasks. This preserves Pi's normal system prompt and only appends routing policy. Restart/recreate the Pi session after changing it so the new prompt is loaded.
 
-With MCP gateway v9, Pi does not carry the SearXNG API key. The gateway injects it only on its private backend connection, while Pi uses the trusted `ai-local` endpoints directly.
+With MCP gateway v10, Pi uses the trusted `ai-local` endpoints directly. The private upstream SearXNG container is not host-published and does not need a separate application-level API key.
 
 If `mcp-gateway` is not running, Pi still starts because the MCP servers are lazy.
 
@@ -177,3 +172,35 @@ mkdir -p data/pi/agent data/web
 ```
 
 This does not touch Ollama models or the MCP gateway repo.
+
+## Restart-loop protection
+
+Container startup treats Ollama discovery and first-boot MCP adapter installation as recoverable. A transient Ollama/npm failure no longer exits PID 1 and triggers `restart: unless-stopped`; the Web UI starts with the last known-good model catalog, or the bundled two-Gemma fallback on first boot.
+
+For startup diagnostics:
+
+```bash
+./scripts/logs.sh
+```
+
+It prints Docker restart/exit state and the last 200 Pi log lines.
+
+## Automatic Ollama model discovery
+
+Pi no longer has a static model list. On every `pi` container start, `scripts/sync-ollama-models.mjs` reads Ollama's `/api/tags`, optionally enriches incomplete entries with `/api/show`, and atomically regenerates:
+
+```text
+data/pi/agent/models.json
+```
+
+All installed Ollama models are listed. Native context is capped by `PI_OLLAMA_CONTEXT_CAP` (default 65536) to avoid accidentally requesting oversized contexts on local hardware. Vision and thinking flags are inferred from Ollama capabilities. Per-model metadata can be overridden in `config/models-overrides.json`.
+
+After pulling a new model, restart Pi to refresh the selector:
+
+```bash
+docker exec ollama ollama pull <model>
+cd ~/Projects/pi-docker
+docker compose restart pi
+```
+
+Or regenerate the catalog explicitly with `./scripts/sync-models.sh` and then restart Pi if the UI was already running.

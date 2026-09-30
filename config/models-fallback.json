@@ -16,12 +16,7 @@
           "input": ["text", "image"],
           "contextWindow": 65536,
           "maxTokens": 4096,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
         },
         {
           "id": "gemma4:e4b-it-qat-64k",
@@ -30,12 +25,7 @@
           "input": ["text", "image"],
           "contextWindow": 65536,
           "maxTokens": 4096,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
         }
       ]
     }
