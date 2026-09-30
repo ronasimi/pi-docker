@@ -19,5 +19,15 @@ echo '== MCP gateway DNS from Pi container =='
 docker compose exec -T pi getent hosts mcp-gateway || echo 'mcp-gateway not found on ai-local'
 
 echo
+echo '== MCP TCP endpoints from Pi container =='
+for port in 8888 8931 8932; do
+  if docker compose exec -T pi bash -lc "exec 3<>/dev/tcp/mcp-gateway/$port" >/dev/null 2>&1; then
+    echo "mcp-gateway:$port reachable"
+  else
+    echo "mcp-gateway:$port unreachable"
+  fi
+done
+
+echo
 echo '== Pi models =='
 docker compose exec -T pi pi --list-models 2>/dev/null | grep -E 'ollama|gemma4' || true

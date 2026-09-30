@@ -25,7 +25,6 @@ services:
       PI_WEB_HOST: 0.0.0.0
       PI_WEB_PORT: 8787
       PI_WEB_TOKEN: ${PI_WEB_TOKEN:-}
-      MCP_GATEWAY_AUTH_TOKEN: ${MCP_GATEWAY_AUTH_TOKEN:-}
 
     volumes:
       # Host-visible durable state. These directories are created by scripts/init.sh.

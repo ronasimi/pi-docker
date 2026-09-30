@@ -2,16 +2,11 @@
   "mcpServers": {
     "searxng": {
       "url": "http://mcp-gateway:8888/mcp/",
-      "headers": {
-        "x-api-key": "${MCP_GATEWAY_AUTH_TOKEN}"
-      },
       "directTools": false,
       "exposeResources": false,
       "requestTimeoutMs": 30000,
       "searchKeywords": {
-        "search": ["web", "internet", "current", "news", "research", "search"],
-        "autocomplete": ["suggest", "query", "autocomplete"],
-        "engine_info": ["search engines", "categories", "searxng"]
+        "*": ["web", "search", "internet", "searxng", "news", "current", "research"]
       }
     },
     "playwright": {
@@ -20,11 +15,16 @@
       "exposeResources": false,
       "requestTimeoutMs": 60000,
       "searchKeywords": {
-        "browser_navigate": ["browser", "navigate", "url", "website", "page"],
-        "browser_click": ["click", "button", "link", "browser"],
-        "browser_type": ["type", "input", "form", "browser"],
-        "browser_snapshot": ["page", "accessibility", "snapshot", "browser"],
-        "browser_take_screenshot": ["screenshot", "browser", "page image"]
+        "*": ["browser", "web", "navigate", "page", "click", "form", "screenshot"]
+      }
+    },
+    "memory": {
+      "url": "http://mcp-gateway:8932/mcp",
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 30000,
+      "searchKeywords": {
+        "*": ["memory", "remember", "recall", "knowledge", "entity", "relation", "observation"]
       }
     }
   },

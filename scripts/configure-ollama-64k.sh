@@ -17,19 +17,40 @@ wait_for_ollama() {
 
 has_model() {
   local name="$1"
-  curl -fsS "$OLLAMA_URL/api/tags" | jq -e --arg n "$name" '.models[]?.name == $n' >/dev/null
+  # Use any(...) instead of emitting one boolean per model.  `jq -e` returns
+  # the status of its final output, so `.models[]?.name == $n` incorrectly
+  # reports a present model as missing whenever a later model does not match.
+  curl -fsS "$OLLAMA_URL/api/tags" \
+    | jq -e --arg n "$name" 'any(.models[]?; .name == $n)' >/dev/null
+}
+
+wait_for_model() {
+  local name="$1" tries=0
+  until has_model "$name"; do
+    tries=$((tries + 1))
+    if (( tries >= 30 )); then
+      echo "Timed out waiting for Ollama model: $name" >&2
+      return 1
+    fi
+    sleep 1
+  done
 }
 
 create_alias() {
   local source="$1" target="$2"
+
   if has_model "$target"; then
     echo "Already exists: $target"
-    return
+    return 0
   fi
+
   if ! has_model "$source"; then
     echo "Missing source model: $source" >&2
+    echo "Available Ollama models:" >&2
+    curl -fsS "$OLLAMA_URL/api/tags" | jq -r '.models[]?.name' >&2 || true
     return 1
   fi
+
   echo "Creating $target from $source with num_ctx=65536..."
   jq -n \
     --arg model "$target" \
@@ -38,6 +59,8 @@ create_alias() {
   | curl -fsS "$OLLAMA_URL/api/create" \
       -H 'Content-Type: application/json' \
       --data-binary @- >/dev/null
+
+  wait_for_model "$target"
 }
 
 wait_for_ollama
@@ -46,4 +69,6 @@ create_alias 'gemma4:e4b-it-qat' 'gemma4:e4b-it-qat-64k'
 
 echo
 echo "Configured Ollama models:"
-curl -fsS "$OLLAMA_URL/api/tags" | jq -r '.models[]?.name' | grep -E 'gemma4:.*64k$|gemma4:e[24]b-it-qat$' || true
+curl -fsS "$OLLAMA_URL/api/tags" \
+  | jq -r '.models[]?.name' \
+  | grep -E 'gemma4:.*64k$|gemma4:e[24]b-it-qat$' || true

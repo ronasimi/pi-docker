@@ -12,7 +12,8 @@ Pi + pi-web-ui container
      |-- host.docker.internal:11434 --> existing Ollama container
      `-- ai-local -------------------> mcp-gateway container
                                        |-- SearXNG MCP :8888
-                                       `-- Playwright MCP :8931
+                                       |-- Playwright MCP :8931
+                                       `-- Memory MCP :8932
 ```
 
 ## Repository state layout
@@ -46,7 +47,7 @@ pi-docker/
 - These source models already pulled in Ollama:
   - `gemma4:e2b-it-qat`
   - `gemma4:e4b-it-qat`
-- `~/Projects/mcp-gateway` is optional but expected for MCP search/browser tools.
+- `~/Projects/mcp-gateway` is optional but expected for MCP search/browser/memory tools.
 
 ## First start
 
@@ -58,7 +59,7 @@ cd ~/Projects/pi-docker
 The init script:
 
 1. creates `.env` from `.env.example` if necessary;
-2. copies the MCP token from adjacent `../mcp-gateway/.env` when available;
+2. ensures the shared `ai-local` Docker network exists;
 3. creates the external `ai-local` Docker network if missing;
 4. creates lightweight Ollama aliases with `num_ctx=65536`;
 5. builds and starts the Pi/Web UI container.
@@ -90,8 +91,11 @@ Configured endpoints:
 
 - `http://mcp-gateway:8888/mcp/` — SearXNG
 - `http://mcp-gateway:8931/mcp` — Playwright
+- `http://mcp-gateway:8932/mcp` — Memory
 
-Both use `directTools: false`. Pi sees the small generic `mcp`/`mcpScript` gateway instead of injecting every MCP schema into every model request.
+All three use `directTools: false`. Pi sees the small generic `mcp`/`mcpScript` gateway instead of injecting every MCP schema into every model request.
+
+With MCP gateway v9, Pi does not carry the SearXNG API key. The gateway injects it only on its private backend connection, while Pi uses the trusted `ai-local` endpoints directly.
 
 If `mcp-gateway` is not running, Pi still starts because the MCP servers are lazy.
 
