@@ -68,18 +68,6 @@
         ]
       },
       "lifecycle": "lazy"
-    },
-    "system": {
-      "transport": "http",
-      "url": "http://mcp-system:8933/mcp",
-      "description": "Docker, host diagnostics, networking, OpenWrt, image processing, and document tools. Search by capability before use.",
-      "lifecycle": "lazy"
-    },
-    "google": {
-      "transport": "http",
-      "url": "http://mcp-google:8934/mcp",
-      "description": "Google Workspace tools for Gmail, Calendar, and Drive. Credentials remain server-side. Search by capability before use.",
-      "lifecycle": "lazy"
     }
   },
   "settings": {

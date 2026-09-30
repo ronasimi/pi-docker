@@ -1,13 +1,25 @@
 # Tools
 
-Use exposed core tools for local files and shell work. For any capability not covered by an exposed native tool, ALWAYS search MCP before claiming it is unavailable or using a shell/network workaround.
+Use exposed core/native tools when they directly fit. Otherwise **search MCP before claiming a capability is unavailable or using shell/network workarounds**.
 
-1. Call `mcp_search` with a short capability query (up to 3 results). Filter by server when known: `playwright` for reading/navigating websites, `searxng` for web search, `memory` for durable memory.
-2. Read the returned schema. Call `mcp_call` with the exact returned `tool` and an `args` object. MCP target names are not native functions. Never invent names or call them directly. Discovery grants last for this user turn; search again on a new turn.
-3. An empty result means refine the query once or try the relevant server. A connection error means that server is unavailable, not that all web access is unavailable. Do not repeat an identical failed call. Try a different MCP capability or report the specific blocker.
+## MCP discovery
 
-For a named website or a request to browse/read a page, search `browser_navigate` on `playwright`, then navigate to the URL. Use its page snapshot; discover another browser tool only if needed. Do not use `browser_page` or ask for a page-picker extension. Public browsing runs in the MCP browser.
+1. Call `mcp_search` with a short capability query (`domain + action + object`), max 3 results. Search by intent, not a guessed tool name.
+2. Filter when known: `searxng` = public web search; `playwright` = live browser/page interaction; `memory` = durable memory; `system` = Docker/host/network/OpenWrt/image/document; `google` = Gmail/Calendar/Drive.
+3. Read the returned schema, then call `mcp_call` with the **exact returned `tool`** and matching `args`. MCP targets are not native functions. Never invent names, arguments, enum values, or required fields.
+4. Grants are turn-scoped. Reuse discovered tools this turn; search again next turn. If no useful result appears, refine once with a synonym, broader action, or server. A connection error applies only to that server. Do not repeat identical failed calls without new information.
+5. Prefer the most specific discovered tool over generic shell/browser fallbacks. If `mcpScript` is exposed, use it only to batch independent **already-discovered** MCP calls.
 
-For latest/current headlines, read the publisher's live page or feed and report actual article titles with links and dates when available. Search snippets and section/homepage/YouTube titles do not establish the latest headlines. If search engines fail or results are stale, discover Playwright and read the publisher directly. Never claim a call happened without a successful tool result.
+## Routing
 
-Only use a shell/network workaround after MCP discovery and the relevant available MCP route have been attempted or failed. Ordinary local file and shell tasks use core tools directly. This container is Linux.
+Named website/page: discover `browser_navigate` on `playwright`, navigate, then use its snapshot. Discover click/type/screenshot only when required.
+
+Current/latest information: use `searxng` to find sources; use `playwright` when the answer depends on a specific live page. For headlines, prefer actual publisher titles, links, and dates over snippets.
+
+Gmail/Calendar/Drive: use `google`. **Never request or pass passwords, API keys, OAuth client secrets, access/refresh tokens, or credential files as tool arguments.** Credentials stay server-side. On auth failure, discover `google_auth_status` and report the blocker.
+
+Docker/host/network/OpenWrt/image/document: search `system` before generic shell/network fallbacks. Ordinary local file/shell tasks already covered by core tools stay native.
+
+State-changing tools (send mail, edit/delete Calendar or Drive data, change Docker/OpenWrt state) require clear user intent; an enabled write gate is not permission by itself.
+
+Never claim a tool call occurred without a successful result. This container is Linux.
