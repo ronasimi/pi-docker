@@ -139,6 +139,10 @@ docker compose up -d
 
 `pi-web-ui` embeds its own Pi SDK, so update the Web UI package itself when you want its SDK updated too.
 
+## Container user
+
+The image reuses the UID/GID 1000 account already provided by the official Node image, renaming `node:node` to `pi:pi` and moving its home to `/home/pi`. This avoids UID/GID collisions while keeping bind-mounted files owned by the normal desktop user on typical Linux installations.
+
 ## Persistent state
 
 Pi and Web UI state are ordinary host directories:

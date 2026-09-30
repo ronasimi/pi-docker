@@ -11,11 +11,16 @@ RUN apt-get update && \
     npm install -g "pi-web-ui@${PI_WEB_UI_VERSION}" && \
     rm -rf /root/.npm /var/lib/apt/lists/*
 
-# Run as an unprivileged user so files created under /workspace are not root-owned
-# on a typical single-user Linux desktop (UID/GID 1000).
-RUN groupadd --gid 1000 pi && \
-    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash pi && \
-    mkdir -p /workspace /home/pi/.pi/agent /home/pi/.pi-web /home/pi/.config/mcp && \
+# node:22-bookworm-slim already provides node:node at UID/GID 1000.
+# Reuse that account instead of trying to create a conflicting second 1000:1000 user.
+RUN set -eux; \
+    test "$(id -u node)" = "1000"; \
+    test "$(id -g node)" = "1000"; \
+    usermod --login pi --home /home/pi --move-home --shell /bin/bash node; \
+    groupmod --new-name pi node; \
+    test "$(id -u pi)" = "1000"; \
+    test "$(id -g pi)" = "1000"; \
+    mkdir -p /workspace /home/pi/.pi/agent /home/pi/.pi-web /home/pi/.config/mcp; \
     chown -R pi:pi /workspace /home/pi
 
 COPY --chown=pi:pi scripts/container-entrypoint.sh /usr/local/bin/pi-container-entrypoint
