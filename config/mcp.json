@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "searxng": {
+      "url": "http://mcp-gateway:8888/mcp/",
+      "headers": {
+        "x-api-key": "${MCP_GATEWAY_AUTH_TOKEN}"
+      },
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 30000,
+      "searchKeywords": {
+        "search": ["web", "internet", "current", "news", "research", "search"],
+        "autocomplete": ["suggest", "query", "autocomplete"],
+        "engine_info": ["search engines", "categories", "searxng"]
+      }
+    },
+    "playwright": {
+      "url": "http://mcp-gateway:8931/mcp",
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 60000,
+      "searchKeywords": {
+        "browser_navigate": ["browser", "navigate", "url", "website", "page"],
+        "browser_click": ["click", "button", "link", "browser"],
+        "browser_type": ["type", "input", "form", "browser"],
+        "browser_snapshot": ["page", "accessibility", "snapshot", "browser"],
+        "browser_take_screenshot": ["screenshot", "browser", "page image"]
+      }
+    }
+  },
+  "settings": {
+    "directTools": false,
+    "namespaceProxyTools": false,
+    "allowInstall": false,
+    "scriptMode": true,
+    "exposeResources": false,
+    "hostConfigDiscovery": "off",
+    "warnOnLargeDirectTools": true,
+    "toolResultRendering": "compact"
+  }
+}

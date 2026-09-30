@@ -1,0 +1,58 @@
+services:
+  pi:
+    build:
+      context: .
+      args:
+        PI_VERSION: ${PI_VERSION:-latest}
+        PI_WEB_UI_VERSION: ${PI_WEB_UI_VERSION:-0.96.1}
+    image: local/pi-web-ui:latest
+    container_name: pi
+    restart: unless-stopped
+
+    # Ollama stays in its existing, separate Docker project and is reached
+    # through the host-published port 11434.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Keep the web UI local to this machine.
+    ports:
+      - "127.0.0.1:${PI_WEB_PORT:-8787}:8787"
+
+    environment:
+      PI_CODING_AGENT_DIR: /home/pi/.pi/agent
+      PI_WEB_DATA_DIR: /home/pi/.pi-web
+      PI_WEB_CWD: /workspace
+      PI_WEB_HOST: 0.0.0.0
+      PI_WEB_PORT: 8787
+      PI_WEB_TOKEN: ${PI_WEB_TOKEN:-}
+      MCP_GATEWAY_AUTH_TOKEN: ${MCP_GATEWAY_AUTH_TOKEN:-}
+
+    volumes:
+      # Pi sessions/settings/packages survive image rebuilds.
+      - pi_data:/home/pi/.pi
+      # Web UI state, themes, uploads, etc.
+      - pi_web_data:/home/pi/.pi-web
+      # Version-controlled provider and MCP configuration.
+      - ./config/models.json:/home/pi/.pi/agent/models.json:ro
+      - ./config/mcp.json:/home/pi/.config/mcp/mcp.json:ro
+      # Let Pi work directly on the host Projects tree.
+      - ${HOME}/Projects:/workspace
+
+    networks:
+      - ai-local
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8787/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pi_data:
+  pi_web_data:
+
+networks:
+  ai-local:
+    external: true
+    name: ai-local
