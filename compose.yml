@@ -1,0 +1,20 @@
+services:
+  pi:
+    build: .
+    container_name: pi
+
+    stdin_open: true
+    tty: true
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      - pi_data:/root/.pi
+      - ./config/models.json:/root/.pi/agent/models.json:ro
+      - ${HOME}/Projects:/workspace
+
+    working_dir: /workspace
+
+volumes:
+  pi_data:

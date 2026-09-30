@@ -1,0 +1,10 @@
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://host.docker.internal:11434/v1",
+      "apiKey": "ollama",
+      "api": "openai-completions",
+      "models": []
+    }
+  }
+}
