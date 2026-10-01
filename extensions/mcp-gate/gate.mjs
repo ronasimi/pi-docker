@@ -1,10 +1,126 @@
 export const ALLOWED_TOOLS = ['read', 'write', 'edit', 'bash', 'mcp_search', 'mcp_call'];
-export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200 });
+export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200, serverCandidates: 96, globalCandidates: 100 });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
 const textOf = result => (result?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 const failed = result => Boolean(result?.isError || result?.details?.error);
 const data = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }], details: {} });
 function failure(message) { throw new Error(message); }
+
+const STOP_WORDS = new Set(['a','an','and','are','for','from','get','give','how','i','in','is','me','my','of','on','please','show','the','to','what','which','with']);
+
+function normalized(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[_/.:()+-]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+function canonicalToken(token) {
+  if (token.length > 4 && token.endsWith('ies')) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith('ses')) return token.slice(0, -2);
+  if (token.length > 3 && token.endsWith('s') && !token.endsWith('ss')) return token.slice(0, -1);
+  return token;
+}
+function tokenSet(value) {
+  return new Set(normalized(value).split(' ').filter(token => token && !STOP_WORDS.has(token)).map(canonicalToken));
+}
+function localToolName(match) {
+  const prefix = `${match.server}_`;
+  return typeof match.tool === 'string' && match.tool.startsWith(prefix) ? match.tool.slice(prefix.length) : String(match.tool ?? '');
+}
+function preferredFamily(server, query) {
+  const q = normalized(query);
+  if (server === 'system') {
+    if (/\b(openwrt|router|uci|ubus|anansi|arachne)\b/.test(q) || /\b(connected devices|dhcp leases|lan clients|wifi clients)\b/.test(q)) return 'openwrt';
+    if (/\b(docker|container|compose)\b/.test(q)) return 'docker';
+    if (/\b(pdf|document|docx|xlsx|pptx|epub|pandoc)\b/.test(q)) return 'document';
+    if (/\b(photo|picture|png|jpe?g|webp|exif|thumbnail|crop|resize)\b/.test(q)) return 'image';
+    if (/\b(host|linux|cpu|ram|swap|process|filesystem|disk|mount)\b/.test(q)) return 'host';
+    if (/\b(dns|ping|traceroute|trace route|tcp|port|cidr|network interface|http probe)\b/.test(q)) return 'network';
+  }
+  if (server === 'google') {
+    if (/\b(oauth|auth|authorization|credentials?|token status|account connected)\b/.test(q)) return 'auth';
+    if (/\b(gmail|email|mailbox|inbox|message|thread|unread|draft|send mail|archive mail)\b/.test(q)) return 'gmail';
+    if (/\b(calendar|schedule|meeting|event|appointment|free busy|availability)\b/.test(q)) return 'calendar';
+    if (/\b(drive|google doc|google sheet|google slide|folder|document|file)\b/.test(q)) return 'drive';
+  }
+  return null;
+}
+function inFamily(server, tool, family) {
+  if (!family) return true;
+  const local = localToolName({ server, tool });
+  if (server === 'system') return local.startsWith(`${family}_`);
+  if (server === 'google') return family === 'auth' ? local === 'google_auth_status' : local.startsWith(`${family}_`);
+  return true;
+}
+function overlapCount(a, b) {
+  let n = 0;
+  for (const token of a) if (b.has(token)) n++;
+  return n;
+}
+function scoreDiscoveryMatch(config, query, match, index) {
+  const local = localToolName(match);
+  const q = normalized(query);
+  const qTokens = tokenSet(query);
+  const toolTokens = tokenSet(local);
+  const keywords = config.mcpServers?.[match.server]?.searchKeywords ?? {};
+  const aliases = Array.isArray(keywords[local]) ? keywords[local] : [];
+  let score = Math.max(0, 1 - index / 1000);
+  score += overlapCount(qTokens, toolTokens) * 7;
+  let bestAlias = 0;
+  for (const alias of aliases) {
+    const a = normalized(alias);
+    if (!a) continue;
+    const aTokens = tokenSet(a);
+    const overlap = overlapCount(qTokens, aTokens);
+    let aliasScore = overlap * 12;
+    if (q === a) aliasScore += 120;
+    else {
+      if (q.includes(a)) aliasScore += 45;
+      if (a.includes(q)) aliasScore += 30;
+    }
+    if (qTokens.size) aliasScore += 25 * (overlap / qTokens.size);
+    bestAlias = Math.max(bestAlias, aliasScore);
+  }
+  return score + bestAlias;
+}
+
+// The adapter's lexical search is intentionally asked for a larger metadata-only
+// candidate set. We then apply per-tool aliases and family hints locally before
+// exposing at most three complete schemas to the model. This prevents broad
+// server aliases (for example "router" on the system server) from making an
+// unrelated Docker/document tool outrank openwrt_clients.
+export function rankDiscoveryMatches(config, query, matches = []) {
+  const unique = [];
+  const seen = new Set();
+  for (const match of matches) {
+    if (!match || typeof match.tool !== 'string' || typeof match.server !== 'string') continue;
+    const key = `${match.server}\0${match.tool}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(match);
+  }
+
+  const familyAvailability = new Map();
+  for (const match of unique) {
+    const family = preferredFamily(match.server, query);
+    if (!family) continue;
+    const key = `${match.server}\0${family}`;
+    if (inFamily(match.server, match.tool, family)) familyAvailability.set(key, true);
+  }
+
+  return unique
+    .map((match, index) => {
+      const family = preferredFamily(match.server, query);
+      const restrict = family && familyAvailability.get(`${match.server}\0${family}`);
+      return { match, index, keep: !restrict || inFamily(match.server, match.tool, family), score: scoreDiscoveryMatch(config, query, match, index) };
+    })
+    .filter(row => row.keep)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(row => row.match);
+}
+
 
 // Keep the real adapter's transports, argument validation, approval handling,
 // reconnect logic, and output guard. Only its model-facing surface is replaced.
@@ -105,11 +221,15 @@ export class BoundedGate {
       }
     }));
     if (signal?.aborted) throw signal.reason;
-    const found = await this.invoke({ search: query, server: params.server, limit, offset, includeSchemas: false, searchMode: 'lexical' }, signal);
+    const candidateLimit = params.server ? LIMITS.serverCandidates : LIMITS.globalCandidates;
+    const found = await this.invoke({ search: query, server: params.server, limit: candidateLimit, offset: 0, includeSchemas: false, searchMode: 'lexical' }, signal);
     if (failed(found)) failure(`MCP discovery failed: ${textOf(found).slice(0, 1500)}`);
-    const output = { tools: [], errors, omitted: [], hasMore: Boolean(found.details?.hasMore), nextOffset: found.details?.nextOffset ?? null,
+    const ranked = rankDiscoveryMatches(this.config, query, found.details?.matches ?? []);
+    const output = { tools: [], errors, omitted: [], hasMore: false, nextOffset: null,
       instruction: 'Call mcp_call with the exact tool and an args object matching inputSchema. These names are MCP targets, not native functions.' };
-    for (const match of (found.details?.matches ?? []).slice(0, limit)) {
+    let cursor = offset;
+    while (cursor < ranked.length && output.tools.length < limit) {
+      const match = ranked[cursor++];
       if (typeof match.tool !== 'string' || match.tool.length > 256) {
         output.omitted.push({ reason: 'Server returned an invalid or oversized tool name.' });
         continue;
@@ -131,6 +251,8 @@ export class BoundedGate {
       }
       output.tools.push(item);
     }
+    output.hasMore = cursor < ranked.length || Boolean(found.details?.hasMore);
+    output.nextOffset = output.hasMore ? cursor : null;
     if (!output.tools.length) output.instruction = errors.length
       ? 'Discovery is incomplete because a server is unavailable. Report the error or try another configured MCP server.'
       : 'No callable match. Refine the capability query or server filter; never invent a tool name.';

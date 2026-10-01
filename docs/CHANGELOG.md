@@ -1,3 +1,23 @@
+# 2026-10-01 — MCP discovery precision and family reranking
+
+- Diagnosed the Anansi `router client list` miss: the System `searchKeywords["*"]`
+  bucket applied broad terms such as `router`, `network`, and `file` to every
+  System tool, so unrelated Docker/document entries could rank ahead of
+  `openwrt_clients`.
+- Remove wildcard aliases from the heterogeneous System, Google, and Security
+  catalogs while retaining high-signal per-tool aliases.
+- Fetch a larger metadata-only candidate pool inside the bounded gate, then
+  rerank locally before schema expansion. Model-facing discovery remains capped
+  at three complete schemas and the existing 16 KiB response budget.
+- Add family filtering for System (OpenWrt/Docker/host/network/image/document)
+  and Google (auth/Gmail/Calendar/Drive), plus light plural normalization so
+  `client` and `clients` rank together.
+- Add regression coverage for router-client and Gmail family isolation.
+- Validation in this editing environment: 17 gate tests passed, 2 policy tests
+  skipped by their own environment guards, and all 14 security-gateway tests
+  passed. Full Pi SDK/reasoning tests require dependencies not included in the
+  saved archive and should be rerun in the Pi development container/host.
+
 # 2026-10-01 — Repeated MCP calls and follow-up recovery
 
 - The attached session's Arachne status and Anansi client calls were blocked because discovery was reset before each user message. The router tools were not attempted.

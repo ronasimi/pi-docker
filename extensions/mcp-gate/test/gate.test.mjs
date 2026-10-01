@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, LIMITS } from '../gate.mjs';
+import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, LIMITS, rankDiscoveryMatches } from '../gate.mjs';
 
 function fixture(options = {}) {
   const calls = [];
@@ -15,6 +15,58 @@ function fixture(options = {}) {
   });
   return { gate, calls };
 }
+
+
+test('family-aware discovery prevents broad server terms from outranking the requested capability', () => {
+  const config = {
+    mcpServers: {
+      system: {
+        searchKeywords: {
+          docker_list_containers: ['docker containers', 'docker ps'],
+          document_list: ['list documents', 'files'],
+          openwrt_status: ['router status', 'anansi', 'arachne'],
+          openwrt_clients: ['router clients', 'connected devices', 'dhcp leases', 'wifi clients', 'lan clients'],
+          local_daily_briefing: ['london weather and news', 'london daily briefing', 'weather and headlines', 'cbc london headlines'],
+        },
+      },
+      google: {
+        searchKeywords: {
+          gmail_search: ['gmail search', 'email search', 'inbox'],
+          calendar_list_events: ['calendar events', 'schedule', 'meetings'],
+          drive_search: ['drive search', 'google drive files'],
+        },
+      },
+    },
+  };
+  const systemMatches = [
+    { server: 'system', tool: 'system_docker_list_containers' },
+    { server: 'system', tool: 'system_document_list' },
+    { server: 'system', tool: 'system_openwrt_status' },
+    { server: 'system', tool: 'system_openwrt_clients' },
+  ];
+  assert.deepEqual(
+    rankDiscoveryMatches(config, 'router client list', systemMatches).map(x => x.tool),
+    ['system_openwrt_clients', 'system_openwrt_status'],
+  );
+  const briefingMatches = [
+    { server: 'system', tool: 'system_docker_list_containers' },
+    { server: 'system', tool: 'system_openwrt_status' },
+    { server: 'system', tool: 'system_local_daily_briefing' },
+  ];
+  assert.equal(
+    rankDiscoveryMatches(config, 'london weather and news', briefingMatches)[0].tool,
+    'system_local_daily_briefing',
+  );
+  const googleMatches = [
+    { server: 'google', tool: 'google_drive_search' },
+    { server: 'google', tool: 'google_calendar_list_events' },
+    { server: 'google', tool: 'google_gmail_search' },
+  ];
+  assert.deepEqual(
+    rankDiscoveryMatches(config, 'search my gmail inbox', googleMatches).map(x => x.tool),
+    ['google_gmail_search'],
+  );
+});
 
 test('all upstream direct tools and scripting are disabled without mutating source config', () => {
   const original = { mcpServers: { x: { directTools: ['search'], disabled: true } }, settings: { scriptMode: true } };
@@ -32,7 +84,7 @@ test('cold search connects selected server, clamps limit, returns complete schem
   assert.equal(value.tools.length, 3);
   assert.deepEqual(value.tools[0].inputSchema.required, ['url']);
   assert.equal(calls.filter(c => c.connect).length, 1);
-  assert.equal(calls.find(c => c.search).limit, 3);
+  assert.equal(calls.find(c => c.search).limit, LIMITS.serverCandidates);
   await gate.call({ tool: value.tools[0].tool, args: '{"url":"https://example.com"}' });
   assert.deepEqual(calls.at(-1), { server: 'playwright', tool: 'navigate_0', args: { url: 'https://example.com' } });
   await gate.search({ query: 'navigate', server: 'playwright' });
