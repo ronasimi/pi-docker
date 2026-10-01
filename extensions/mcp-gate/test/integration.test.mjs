@@ -74,9 +74,9 @@ test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reloa
     for (const request of requests) assert.deepEqual(request.tools.map(t => t.function.name).sort(), [...ALLOWED_TOOLS].sort());
     const searchTool = requests[0].tools.find(t => t.function.name === 'mcp_search');
     assert.ok(searchTool, 'mcp_search schema is exposed');
-    assert.match(searchTool.function.description, /security=authorized red-team\/blue-team/);
-    assert.match(searchTool.function.description, /system=Docker\/host\/network\/OpenWrt\/image\/document/);
-    assert.match(searchTool.function.description, /google=Gmail\/Calendar\/Drive/);
+    assert.match(searchTool.function.description, /server=security/);
+    assert.match(searchTool.function.description, /hasMore\/nextOffset/);
+    assert.match(searchTool.function.description, /Validate schema fit/);
     assert.equal(toolCalls.length, 1, 'only the correctly validated, discovered call reaches MCP');
     assert.equal(toolCalls[0].name, 'browser_navigate');
     assert.deepEqual(toolCalls[0].arguments, { url: 'https://example.com' });

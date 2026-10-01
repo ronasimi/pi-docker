@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, LIMITS, rankDiscoveryMatches } from '../gate.mjs';
+import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, inferServerForQuery, LIMITS, rankDiscoveryMatches } from '../gate.mjs';
 
 function fixture(options = {}) {
   const calls = [];
@@ -8,7 +8,7 @@ function fixture(options = {}) {
   const gate = new BoundedGate(config, async params => {
     calls.push(params);
     if (params.connect) return options.offline === params.connect ? { details: { error: 'offline' }, content: [{ type: 'text', text: 'offline' }] } : { details: {} };
-    if ('search' in params) return { details: { matches: Array.from({ length: 10 }, (_, i) => ({ server: params.server || 'playwright', tool: `${params.search}_${i}` })), hasMore: true, nextOffset: params.offset + params.limit } };
+    if ('search' in params) return { details: { matches: Array.from({ length: 10 }, (_, i) => ({ server: params.server || 'playwright', tool: `${params.search}_${i + (Number(params.offset) || 0)}` })), hasMore: true, nextOffset: params.offset + params.limit } };
     if (params.describe) return { details: { tool: { description: 'Navigate', inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'x'.repeat(options.schemaSize || 5) } }, required: ['url'] } } } };
     if (options.fail) return { details: { error: 'tool_error' }, content: [{ type: 'text', text: 'bridge unavailable' }] };
     return { content: [{ type: 'text', text: 'ok' }], details: {} };
@@ -45,8 +45,12 @@ test('family-aware discovery prevents broad server terms from outranking the req
     { server: 'system', tool: 'system_openwrt_clients' },
   ];
   assert.deepEqual(
-    rankDiscoveryMatches(config, 'router client list', systemMatches).map(x => x.tool),
+    rankDiscoveryMatches(config, 'what clients are connected to my router - anansi', systemMatches).map(x => x.tool),
     ['system_openwrt_clients', 'system_openwrt_status'],
+  );
+  assert.equal(
+    rankDiscoveryMatches(config, 'check anansi router status', systemMatches)[0].tool,
+    'system_openwrt_status',
   );
   const briefingMatches = [
     { server: 'system', tool: 'system_docker_list_containers' },
@@ -66,6 +70,62 @@ test('family-aware discovery prevents broad server terms from outranking the req
     rankDiscoveryMatches(config, 'search my gmail inbox', googleMatches).map(x => x.tool),
     ['google_gmail_search'],
   );
+});
+
+
+test('strong capability queries infer the narrow MCP server when the model omits a filter', () => {
+  const config = { mcpServers: { security: {}, system: {}, google: {}, playwright: {}, searxng: {}, memory: {} } };
+  assert.equal(inferServerForQuery(config, 'discover live hosts on my LAN'), 'security');
+  assert.equal(inferServerForQuery(config, 'run a nuclei vulnerability scan'), 'security');
+  assert.equal(inferServerForQuery(config, 'show connected clients on router anansi'), 'system');
+  assert.equal(inferServerForQuery(config, 'search my Gmail inbox'), 'google');
+  assert.equal(inferServerForQuery(config, 'open this URL in the browser'), 'playwright');
+  assert.equal(inferServerForQuery(config, 'search the web for current news'), 'searxng');
+  assert.equal(inferServerForQuery(config, 'remember this in durable memory'), 'memory');
+});
+
+test('omitted security filter is recovered before discovery touches unrelated servers', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {}, system: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: [{ server: 'security', tool: 'security_network_discover' }], hasMore: false, nextOffset: null } };
+    if (params.describe) return { details: { tool: { description: 'Discover live hosts in an authorized target CIDR.', inputSchema: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] } } } };
+    return { content: [{ type: 'text', text: 'ok' }], details: {} };
+  });
+  const result = JSON.parse((await gate.search({ query: 'discover live hosts on my LAN' })).content[0].text);
+  assert.equal(result.routedServer, 'security');
+  assert.equal(result.tools[0].tool, 'security_network_discover');
+  assert.deepEqual(calls.filter(c => c.connect).map(c => c.connect), ['security']);
+  assert.equal(calls.find(c => c.search).server, 'security');
+});
+
+test('bounded continuation fetches the next upstream page instead of replaying offset zero', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) {
+      const offset = Number(params.offset) || 0;
+      const pages = {
+        0: [{ server: 'security', tool: 'security_alpha' }, { server: 'security', tool: 'security_beta' }],
+        2: [{ server: 'security', tool: 'security_gamma' }, { server: 'security', tool: 'security_delta' }],
+      };
+      return { details: { matches: pages[offset] ?? [], hasMore: offset === 0, nextOffset: offset === 0 ? 2 : null } };
+    }
+    if (params.describe) return { details: { tool: { description: params.describe, inputSchema: { type: 'object', properties: {} } } } };
+    return { content: [{ type: 'text', text: 'ok' }], details: {} };
+  });
+  const first = JSON.parse((await gate.search({ query: 'security audit', server: 'security', limit: 2 })).content[0].text);
+  assert.deepEqual(first.tools.map(t => t.tool), ['security_alpha', 'security_beta']);
+  assert.equal(first.hasMore, true);
+  assert.equal(first.nextOffset, 2);
+  const second = JSON.parse((await gate.search({ query: 'security audit', server: 'security', limit: 2, offset: first.nextOffset })).content[0].text);
+  assert.deepEqual(second.tools.map(t => t.tool), ['security_gamma', 'security_delta']);
+  assert.equal(second.hasMore, false);
+  assert.deepEqual(calls.filter(c => Object.hasOwn(c, 'search')).map(c => c.offset), [0, 2]);
 });
 
 test('all upstream direct tools and scripting are disabled without mutating source config', () => {

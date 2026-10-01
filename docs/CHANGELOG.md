@@ -1,3 +1,15 @@
+# 2026-10-01 — WhiteRabbitNeo bounded discovery continuation hardening
+
+- Route strong security, System/OpenWrt, Google, browser, web-search, and memory capability queries to the matching MCP server when a small model omits the filter; security prompts still require explicit `server=security`.
+- Make `mcp_search` and `mcp_call` sequential at the Pi tool layer so dependent discovery/execution calls cannot race as sibling tool calls.
+- Cache and page the locally reranked discovery stream, following the adapter's upstream `nextOffset` for up to four bounded pages instead of replaying offset zero.
+- Require schema-fit validation and continuation on `hasMore/nextOffset` before refining a search or concluding that a capability is missing.
+- Down-weight one-token entity aliases in longer capability queries so `clients on router anansi` ranks `openwrt_clients` ahead of generic router status while `check anansi router status` still ranks status first.
+- Synchronize the Pi catalog with the gateway's per-tool System/Google/Security aliases, removing broad wildcard aliases while preserving Pi-specific transport timeouts and restrictions.
+- Clarify that `security_network_interfaces` is the security-container namespace only; authorized LAN enumeration uses `security_network_discover` with the actual target CIDR.
+- Add regressions for omitted security routing, multi-page discovery continuation, exact Anansi client ranking, and security network scope.
+- Validation in this archive: 20 runnable gate tests passed (2 policy tests skipped by environment guards) and all 14 security-gateway tests passed.
+
 # 2026-10-01 — MCP discovery precision and family reranking
 
 - Diagnosed the Anansi `router client list` miss: the System `searchKeywords["*"]`

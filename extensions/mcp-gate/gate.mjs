@@ -1,5 +1,5 @@
 export const ALLOWED_TOOLS = ['read', 'write', 'edit', 'bash', 'mcp_search', 'mcp_call'];
-export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200, serverCandidates: 96, globalCandidates: 100 });
+export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200, serverCandidates: 96, globalCandidates: 100, discoveryPages: 4 });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
 const textOf = result => (result?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 const failed = result => Boolean(result?.isError || result?.details?.error);
@@ -29,6 +29,21 @@ function localToolName(match) {
   const prefix = `${match.server}_`;
   return typeof match.tool === 'string' && match.tool.startsWith(prefix) ? match.tool.slice(prefix.length) : String(match.tool ?? '');
 }
+export function inferServerForQuery(config, query) {
+  const q = normalized(query);
+  const enabled = name => Object.hasOwn(config.mcpServers ?? {}, name) && config.mcpServers[name].disabled !== true;
+  const rules = [
+    ['security', /\b(security|cybersecurity|pentest|red team|blue team|vulnerability|vulnerabilities|cve|nuclei|nikto|ffuf|subfinder|amass|searchsploit|sqlmap|metasploit|suricata|yara|osquery|radare2|malware|forensics|pcap|packet capture|ids|sast|sbom|secret scan|host discovery|discover hosts|live hosts|subnet scan|port scan|service detection|tls audit|web server audit)\b/],
+    ['google', /\b(gmail|google mail|mailbox|inbox|google calendar|calendar event|free busy|google drive|google doc|google sheet|google slide|oauth|google auth)\b/],
+    ['system', /\b(openwrt|router|uci|ubus|anansi|arachne|docker|container|host network|host interfaces|host routes|linux host|local daily briefing|london daily briefing|image processing|document processing)\b/],
+    ['playwright', /\b(browser|navigate page|open url|known page|website interaction|click|fill form|page snapshot|browser screenshot)\b/],
+    ['searxng', /\b(web search|search the web|internet search|current news|latest news|find sources|find url|public web)\b/],
+    ['memory', /\b(durable memory|remember|recall memory|memory graph|store memory|retrieve memory)\b/],
+  ];
+  for (const [server, pattern] of rules) if (enabled(server) && pattern.test(q)) return server;
+  return null;
+}
+
 function preferredFamily(server, query) {
   const q = normalized(query);
   if (server === 'system') {
@@ -74,13 +89,17 @@ function scoreDiscoveryMatch(config, query, match, index) {
     if (!a) continue;
     const aTokens = tokenSet(a);
     const overlap = overlapCount(qTokens, aTokens);
-    let aliasScore = overlap * 12;
+    // A one-token entity alias such as a router hostname is useful for server
+    // discovery, but must not outrank the actual capability in a longer query
+    // (for example "clients on router anansi" -> openwrt_clients, not status).
+    const entityOnly = aTokens.size === 1 && qTokens.size > 1;
+    let aliasScore = overlap * (entityOnly ? 3 : 12);
     if (q === a) aliasScore += 120;
     else {
-      if (q.includes(a)) aliasScore += 45;
-      if (a.includes(q)) aliasScore += 30;
+      if (q.includes(a)) aliasScore += entityOnly ? 5 : 45;
+      if (a.includes(q)) aliasScore += entityOnly ? 3 : 30;
     }
-    if (qTokens.size) aliasScore += 25 * (overlap / qTokens.size);
+    if (qTokens.size) aliasScore += (entityOnly ? 5 : 25) * (overlap / qTokens.size);
     bestAlias = Math.max(bestAlias, aliasScore);
   }
   return score + bestAlias;
@@ -149,6 +168,7 @@ export class BoundedGate {
   reset() {
     this.grants = new Map();
     this.connected = new Set();
+    this.discoveryCache = new Map();
     this.beginTurn();
   }
   beginTurn() {
@@ -200,6 +220,30 @@ export class BoundedGate {
     this.queue = result.catch(() => {});
     return result;
   }
+  discoveryKey(query, server) {
+    return `${server ?? '*'}\0${normalized(query)}`;
+  }
+  async fetchDiscoveryPage(state, query, server, signal) {
+    if (!state.upstreamHasMore || state.pages >= LIMITS.discoveryPages) return;
+    const candidateLimit = server ? LIMITS.serverCandidates : LIMITS.globalCandidates;
+    const currentOffset = state.upstreamOffset;
+    const found = await this.invoke({ search: query, server, limit: candidateLimit, offset: currentOffset, includeSchemas: false, searchMode: 'lexical' }, signal);
+    if (failed(found)) failure(`MCP discovery failed: ${textOf(found).slice(0, 1500)}`);
+    const rawMatches = Array.isArray(found.details?.matches) ? found.details.matches : [];
+    const ranked = rankDiscoveryMatches(this.config, query, rawMatches);
+    for (const match of ranked) {
+      const key = `${match.server}\0${match.tool}`;
+      if (state.seen.has(key)) continue;
+      state.seen.add(key);
+      state.matches.push(match);
+    }
+    state.pages++;
+    state.upstreamHasMore = Boolean(found.details?.hasMore);
+    const reported = Number(found.details?.nextOffset);
+    const fallback = currentOffset + Math.max(rawMatches.length, candidateLimit);
+    state.upstreamOffset = Number.isFinite(reported) && reported > currentOffset ? reported : fallback;
+    if (state.upstreamOffset <= currentOffset) state.upstreamHasMore = false;
+  }
   async search(params, signal) {
     if (signal?.aborted) throw signal.reason;
     const query = typeof params.query === 'string' ? params.query.trim() : '';
@@ -209,10 +253,13 @@ export class BoundedGate {
     const offset = Math.min(1000, Math.max(0, Math.floor(Number(params.offset) || 0)));
     const servers = Object.keys(this.config.mcpServers ?? {}).filter(name => this.config.mcpServers[name].disabled !== true);
     if (params.server && !servers.includes(params.server)) failure(`Unknown or disabled MCP server. Available: ${servers.join(', ')}.`);
-    const targets = params.server ? [params.server] : servers;
+    const inferredServer = params.server ? null : inferServerForQuery(this.config, query);
+    const effectiveServer = params.server || inferredServer || undefined;
+    const targets = effectiveServer ? [effectiveServer] : servers;
     const errors = [];
-    // Connect only on first discovery (including an empty metadata cache).
-    // Do not treat an offline server as an empty catalog or permanently cache it.
+    // Connect only the explicit or strongly inferred server when possible. This
+    // prevents a security capability search from being diluted by unrelated
+    // System/Google/browser catalogs when the model forgets a server filter.
     await Promise.all(targets.map(async server => {
       try {
         await this.connect(server, signal);
@@ -221,15 +268,32 @@ export class BoundedGate {
       }
     }));
     if (signal?.aborted) throw signal.reason;
-    const candidateLimit = params.server ? LIMITS.serverCandidates : LIMITS.globalCandidates;
-    const found = await this.invoke({ search: query, server: params.server, limit: candidateLimit, offset: 0, includeSchemas: false, searchMode: 'lexical' }, signal);
-    if (failed(found)) failure(`MCP discovery failed: ${textOf(found).slice(0, 1500)}`);
-    const ranked = rankDiscoveryMatches(this.config, query, found.details?.matches ?? []);
+
+    const key = this.discoveryKey(query, effectiveServer);
+    let state = this.discoveryCache.get(key);
+    if (!state) {
+      state = { matches: [], seen: new Set(), upstreamOffset: 0, upstreamHasMore: true, pages: 0 };
+      this.discoveryCache.set(key, state);
+    }
+    // Pagination is over the locally ranked, deduplicated candidate stream. When
+    // the caller reaches the end of a cached page, fetch the next upstream page
+    // instead of replaying offset=0 and returning the same nextOffset forever.
+    while (offset >= state.matches.length && state.upstreamHasMore && state.pages < LIMITS.discoveryPages) {
+      await this.fetchDiscoveryPage(state, query, effectiveServer, signal);
+    }
+
     const output = { tools: [], errors, omitted: [], hasMore: false, nextOffset: null,
-      instruction: 'Call mcp_call with the exact tool and an args object matching inputSchema. These names are MCP targets, not native functions.' };
+      ...(inferredServer ? { routedServer: inferredServer } : {}),
+      instruction: 'Validate that a returned schema fits the requested action before calling it. If none fits and hasMore is true, call mcp_search again with the same query/server and offset=nextOffset. Otherwise refine the capability query once. Call mcp_call only with an exact returned tool and matching args.' };
     let cursor = offset;
-    while (cursor < ranked.length && output.tools.length < limit) {
-      const match = ranked[cursor++];
+    while (output.tools.length < limit) {
+      if (cursor >= state.matches.length) {
+        if (state.upstreamHasMore && state.pages < LIMITS.discoveryPages) {
+          await this.fetchDiscoveryPage(state, query, effectiveServer, signal);
+          if (cursor >= state.matches.length) break;
+        } else break;
+      }
+      const match = state.matches[cursor++];
       if (typeof match.tool !== 'string' || match.tool.length > 256) {
         output.omitted.push({ reason: 'Server returned an invalid or oversized tool name.' });
         continue;
@@ -243,20 +307,19 @@ export class BoundedGate {
       const meta = described.details.tool;
       const item = { tool: match.tool, server: match.server, description: String(meta.description ?? '').slice(0, 700),
         inputSchema: meta.inputSchema ?? { type: 'object', properties: {}, additionalProperties: false } };
-      // A truncated schema is unsafe to call. Admit only complete schemas within
-      // a hard response budget; a narrower search can fit more of the budget.
       if (bytes({ ...output, tools: [...output.tools, item] }) > LIMITS.discoveryBytes - 1536) {
-        output.omitted.push({ tool: match.tool, reason: 'Complete schema exceeds this response budget. Search its exact name with limit:1; if still omitted, simplify the server schema.' });
+        output.omitted.push({ tool: match.tool, reason: 'Complete schema exceeds this response budget. Search its exact capability with limit:1; if still omitted, simplify the server schema.' });
         continue;
       }
       output.tools.push(item);
     }
-    output.hasMore = cursor < ranked.length || Boolean(found.details?.hasMore);
+    output.hasMore = cursor < state.matches.length || (state.upstreamHasMore && state.pages < LIMITS.discoveryPages);
     output.nextOffset = output.hasMore ? cursor : null;
     if (!output.tools.length) output.instruction = errors.length
-      ? 'Discovery is incomplete because a server is unavailable. Report the error or try another configured MCP server.'
-      : 'No callable match. Refine the capability query or server filter; never invent a tool name.';
-    // Errors and descriptors are bounded above, but keep the whole envelope bounded too.
+      ? 'Discovery is incomplete because the selected MCP server is unavailable. Report the concrete server error or try another configured server.'
+      : output.hasMore
+        ? 'No callable schema in this slice. Continue with the same query/server and offset=nextOffset before refining the query; never invent a tool name.'
+        : 'No callable match. Refine the capability query once or choose the correct server filter; never invent a tool name.';
     while (bytes(output) > LIMITS.discoveryBytes && output.errors.length) output.errors.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.omitted.length) output.omitted.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.tools.length) output.tools.pop();

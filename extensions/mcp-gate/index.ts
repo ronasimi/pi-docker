@@ -38,7 +38,8 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_search', label: 'MCP search',
-    description: 'Discover bounded MCP tools for capabilities not directly provided by core tools. Search before shell/network workarounds when an external, infrastructure, or security capability is needed. Servers: security=authorized red-team/blue-team, vulnerability assessment, reconnaissance, security testing, forensics, malware, packet/log and incident analysis; system=Docker/host/network/OpenWrt/image/document; google=Gmail/Calendar/Drive; playwright=browser interaction/live pages; searxng=public web search; memory=durable memory. Returns up to 3 complete schemas; execute exact matches via mcp_call.',
+    description: 'Discover bounded MCP tools for capabilities not directly provided by core tools. Security work should use server=security; the gate also strongly infers security routing when that filter is omitted. Returns up to 3 complete schemas plus hasMore/nextOffset for bounded continuation. Validate schema fit before execution and use mcp_call only with an exact returned tool.',
+    executionMode: 'sequential',
     parameters: Type.Object({
       query: Type.String({ minLength: 1, maxLength: 200 }),
       server: Type.Optional(Type.String()),
@@ -51,7 +52,8 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Reuse discovered tools across follow-up messages and for status polling. Supply args matching its schema. Explicit retries are allowed; avoid unproductive loops and duplicate writes. If discovery is required, search the capability and retry. Do not call discovered MCP names as native functions.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Reuse discovered tools across follow-up messages and status polling. Supply args matching its schema. If a result is partial, truncated, paginated, or reports hasMore, continue with its returned cursor/offset or a dedicated summary tool before concluding.',
+    executionMode: 'sequential',
     parameters: Type.Object({
       tool: Type.String(),
       args: Type.Optional(Type.Union([Type.Object({}, { additionalProperties: true }), Type.String()])),
