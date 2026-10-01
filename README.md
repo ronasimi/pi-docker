@@ -27,7 +27,7 @@ mcp_search({query: "browser_navigate", server: "playwright"})
 mcp_call({tool: "<exact returned name>", args: {url: "https://www.cbc.ca/news"}})
 ```
 
-Use the actual name returned by search. The model must not issue it as a native function. A named-page/headline request routes to Playwright and reads the live snapshot. SearXNG provides web search; search snippets alone do not prove which headlines are latest.
+Use the actual name returned by search. The model must not issue it as a native function. A named-page/headline request routes to Playwright and reads the live snapshot. SearXNG provides web search; search snippets alone do not prove which headlines are latest. System infrastructure, Google Workspace, and security capabilities remain behind the same bounded discovery flow; security tools are reached through the dedicated `security` server rather than generic Bash when available.
 
 | Bound | Value |
 |---|---:|
@@ -66,8 +66,11 @@ Dependencies are installed at image build time. Container startup only applies t
 | SearXNG MCP | `http://mcp-searxng:8888/mcp/` |
 | Playwright MCP | `http://mcp-gateway:8931/mcp` |
 | Memory MCP | `http://mcp-gateway:8932/mcp` |
+| System MCP | `http://mcp-system:8933/mcp` |
+| Google MCP | `http://mcp-google:8934/mcp` |
+| Security MCP | `http://mcp-security:8935/mcp` |
 
-Edit `config/mcp.json` to add configured MCP servers. Per-server `disabled` flags and adapter approval configuration are respected. The gate always forces direct tools, MCP scripting, and automatic host-config imports off. Resources are not exposed in this tool-only profile.
+`config/mcp.json` registers all bounded servers, including the dedicated `security` endpoint on `mcp-security:8935`. The security container must be running on the shared external `ai-local` Docker network; Pi itself does not launch or route models for it. Edit `config/mcp.json` when adding or removing configured MCP servers. Per-server `disabled` flags and adapter approval configuration are respected. The gate always forces direct tools, MCP scripting, and automatic host-config imports off. Resources are not exposed in this tool-only profile.
 
 ## State and model configuration
 

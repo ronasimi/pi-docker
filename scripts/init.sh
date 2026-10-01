@@ -27,6 +27,6 @@ docker compose up -d --build
 echo
 echo "Pi Web UI: http://127.0.0.1:${PI_WEB_PORT:-8787}"
 echo "Ollama:    existing server at http://127.0.0.1:11434"
-echo "MCP:       mcp-gateway over ai-local"
+echo "MCP:       bounded MCP services over ai-local"
 echo
 echo "Use ./scripts/status.sh to verify connectivity."

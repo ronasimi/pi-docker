@@ -20,7 +20,8 @@
           "url"
         ]
       },
-      "lifecycle": "lazy"
+      "lifecycle": "lazy",
+      "description": "Public web search and current-information discovery. Use for internet search, news discovery, finding URLs, sources, products, documentation, or recent facts; use Playwright to open/read a known page."
     },
     "playwright": {
       "url": "http://mcp-gateway:8931/mcp",
@@ -47,9 +48,77 @@
         "browser_take_screenshot": [
           "screenshot",
           "image"
+        ],
+        "*": [
+          "browser",
+          "website",
+          "web page",
+          "navigate",
+          "open url",
+          "click",
+          "type",
+          "form",
+          "screenshot",
+          "tabs",
+          "console",
+          "network requests",
+          "dynamic page",
+          "page text"
+        ],
+        "browser_click": [
+          "click",
+          "press button",
+          "follow link",
+          "select item",
+          "web interaction"
+        ],
+        "browser_type": [
+          "type",
+          "enter text",
+          "fill field",
+          "input text",
+          "web form"
+        ],
+        "browser_fill_form": [
+          "fill form",
+          "form fields",
+          "submit form",
+          "web form"
+        ],
+        "browser_tabs": [
+          "browser tabs",
+          "new tab",
+          "switch tab",
+          "close tab"
+        ],
+        "browser_wait_for": [
+          "wait for page",
+          "wait for text",
+          "page load",
+          "dynamic content"
+        ],
+        "browser_evaluate": [
+          "browser javascript",
+          "evaluate page",
+          "dom query",
+          "page script"
+        ],
+        "browser_console_messages": [
+          "browser console",
+          "javascript error",
+          "console log",
+          "page error"
+        ],
+        "browser_network_requests": [
+          "browser network",
+          "http requests",
+          "xhr",
+          "fetch requests",
+          "page requests"
         ]
       },
-      "lifecycle": "lazy"
+      "lifecycle": "lazy",
+      "description": "Interactive web browser automation. Use to navigate/open a known website or URL, read a live page snapshot, click/type, follow links, inspect dynamic pages, and take browser screenshots."
     },
     "memory": {
       "url": "http://mcp-gateway:8932/mcp",
@@ -65,20 +134,950 @@
           "entity",
           "relation",
           "observation"
+        ],
+        "read_graph": [
+          "memory graph",
+          "all memory",
+          "knowledge graph",
+          "stored memory"
+        ],
+        "search_nodes": [
+          "search memory",
+          "find memory",
+          "recall entity",
+          "lookup memory",
+          "memory search"
+        ],
+        "open_nodes": [
+          "open memory node",
+          "read entity",
+          "entity details",
+          "memory entity"
+        ],
+        "create_entities": [
+          "remember entity",
+          "store fact",
+          "create memory",
+          "save entity"
+        ],
+        "create_relations": [
+          "remember relation",
+          "link entities",
+          "store relationship"
+        ],
+        "add_observations": [
+          "add memory",
+          "remember observation",
+          "append fact",
+          "store observation"
+        ],
+        "delete_entities": [
+          "forget entity",
+          "delete memory",
+          "remove entity"
+        ],
+        "delete_observations": [
+          "forget observation",
+          "delete fact",
+          "remove observation"
+        ],
+        "delete_relations": [
+          "forget relation",
+          "remove relationship",
+          "delete relation"
         ]
       },
-      "lifecycle": "lazy"
+      "lifecycle": "lazy",
+      "description": "Durable graph memory for facts, entities, relationships, and observations that persist across conversations. Use for remember/recall/store-memory tasks."
     },
     "system": {
-      "transport": "http",
       "url": "http://mcp-system:8933/mcp",
-      "description": "Docker, host diagnostics, networking, OpenWrt, image processing, and document tools. Search by capability before use.",
-      "lifecycle": "lazy"
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 120000,
+      "searchKeywords": {
+        "*": [
+          "docker",
+          "container",
+          "host",
+          "system",
+          "linux",
+          "network",
+          "dns",
+          "ping",
+          "port",
+          "router",
+          "openwrt",
+          "uci",
+          "ubus",
+          "wifi",
+          "image",
+          "photo",
+          "picture",
+          "pdf",
+          "document",
+          "docx",
+          "xlsx",
+          "pptx",
+          "file",
+          "running containers",
+          "docker ps"
+        ],
+        "docker_list_containers": [
+          "docker containers",
+          "running containers",
+          "containers running now",
+          "what containers are running",
+          "docker ps",
+          "docker ps -a",
+          "container list",
+          "container inventory",
+          "stopped containers",
+          "compose containers"
+        ],
+        "docker_inspect_container": [
+          "docker inspect",
+          "container config",
+          "container mounts",
+          "container environment",
+          "container health",
+          "container network"
+        ],
+        "docker_container_logs": [
+          "docker logs",
+          "container logs",
+          "service logs",
+          "stderr",
+          "stdout",
+          "stack trace",
+          "startup error"
+        ],
+        "docker_container_stats": [
+          "docker stats",
+          "container cpu",
+          "container memory",
+          "resource usage",
+          "container performance"
+        ],
+        "docker_list_images": [
+          "docker images",
+          "image list",
+          "local images",
+          "image inventory",
+          "tags"
+        ],
+        "docker_inspect_image": [
+          "image inspect",
+          "docker image config",
+          "layers",
+          "entrypoint",
+          "image metadata"
+        ],
+        "docker_list_networks": [
+          "docker networks",
+          "container networks",
+          "bridge network",
+          "docker connectivity"
+        ],
+        "docker_inspect_network": [
+          "docker network inspect",
+          "subnet",
+          "ipam",
+          "network containers",
+          "aliases"
+        ],
+        "docker_list_volumes": [
+          "docker volumes",
+          "persistent storage",
+          "named volumes"
+        ],
+        "docker_inspect_volume": [
+          "volume inspect",
+          "mountpoint",
+          "volume driver"
+        ],
+        "docker_container_action": [
+          "start container",
+          "stop container",
+          "restart container",
+          "pause container",
+          "kill container"
+        ],
+        "docker_remove_container": [
+          "remove container",
+          "delete container",
+          "docker rm"
+        ],
+        "docker_remove_image": [
+          "remove image",
+          "delete image",
+          "docker rmi"
+        ],
+        "host_snapshot": [
+          "host status",
+          "system health",
+          "linux health",
+          "uptime",
+          "load average",
+          "host overview",
+          "system snapshot"
+        ],
+        "host_cpu_info": [
+          "cpu info",
+          "processor",
+          "cpu flags",
+          "cpu load",
+          "architecture"
+        ],
+        "host_memory_info": [
+          "memory",
+          "ram",
+          "swap",
+          "meminfo",
+          "memory pressure"
+        ],
+        "host_processes": [
+          "processes",
+          "ps",
+          "running process",
+          "top",
+          "pid",
+          "cpu process",
+          "memory process"
+        ],
+        "host_process_info": [
+          "process inspect",
+          "pid info",
+          "cmdline",
+          "open files",
+          "process environment"
+        ],
+        "host_disk_usage": [
+          "disk usage",
+          "filesystem",
+          "free space",
+          "df",
+          "mount usage"
+        ],
+        "host_read_file": [
+          "host file",
+          "linux config",
+          "read config",
+          "proc file",
+          "sys file",
+          "log file"
+        ],
+        "network_dns_lookup": [
+          "dns",
+          "resolve hostname",
+          "dig",
+          "a record",
+          "aaaa",
+          "mx",
+          "txt",
+          "cname",
+          "nameserver"
+        ],
+        "network_ping": [
+          "ping",
+          "icmp",
+          "latency",
+          "packet loss",
+          "reachable",
+          "connectivity"
+        ],
+        "network_trace_route": [
+          "traceroute",
+          "trace route",
+          "network path",
+          "hops",
+          "routing latency"
+        ],
+        "network_http_probe": [
+          "http probe",
+          "https probe",
+          "url status",
+          "endpoint health",
+          "curl",
+          "ttfb",
+          "redirect",
+          "web service"
+        ],
+        "network_port_check": [
+          "port check",
+          "tcp port",
+          "service reachable",
+          "open port",
+          "connect port"
+        ],
+        "network_scan_ports": [
+          "nmap",
+          "port scan",
+          "lan scan",
+          "service discovery",
+          "open ports",
+          "cidr"
+        ],
+        "network_interfaces": [
+          "interfaces",
+          "ip address",
+          "routes",
+          "neighbors",
+          "ip route",
+          "network interface"
+        ],
+        "openwrt_status": [
+          "openwrt status",
+          "router status",
+          "router health",
+          "anansi",
+          "arachne",
+          "router uptime",
+          "router memory"
+        ],
+        "openwrt_uci_show": [
+          "uci show",
+          "openwrt config",
+          "router config",
+          "network config",
+          "wireless config",
+          "firewall config",
+          "dhcp config",
+          "minidlna"
+        ],
+        "openwrt_uci_get": [
+          "uci get",
+          "router setting",
+          "openwrt setting",
+          "ssid",
+          "lan ip"
+        ],
+        "openwrt_ubus_call": [
+          "ubus",
+          "openwrt rpc",
+          "router live state",
+          "network interface dump",
+          "system board"
+        ],
+        "openwrt_logread": [
+          "logread",
+          "router logs",
+          "openwrt logs",
+          "wifi logs",
+          "dhcp logs",
+          "firewall logs"
+        ],
+        "openwrt_wifi_status": [
+          "wifi status",
+          "wireless status",
+          "iwinfo",
+          "ssid",
+          "radio",
+          "wifi clients",
+          "signal"
+        ],
+        "openwrt_service_action": [
+          "openwrt service",
+          "router service",
+          "restart service",
+          "init.d"
+        ],
+        "openwrt_uci_set": [
+          "uci set",
+          "change router setting",
+          "openwrt write",
+          "commit uci"
+        ],
+        "image_list": [
+          "list images",
+          "find images",
+          "photos",
+          "pictures",
+          "png",
+          "jpeg",
+          "webp"
+        ],
+        "image_info": [
+          "image info",
+          "image dimensions",
+          "width height",
+          "identify image",
+          "image format"
+        ],
+        "image_metadata": [
+          "exif",
+          "image metadata",
+          "camera metadata",
+          "gps metadata",
+          "orientation"
+        ],
+        "image_resize": [
+          "resize image",
+          "scale image",
+          "change dimensions",
+          "image size"
+        ],
+        "image_crop": [
+          "crop image",
+          "trim image",
+          "extract image region"
+        ],
+        "image_convert": [
+          "convert image",
+          "image format",
+          "png to jpg",
+          "jpg to webp",
+          "image quality"
+        ],
+        "image_thumbnail": [
+          "thumbnail",
+          "preview image",
+          "small image",
+          "image preview"
+        ],
+        "document_list": [
+          "list documents",
+          "find pdf",
+          "find docx",
+          "files",
+          "documents",
+          "pdfs"
+        ],
+        "document_info": [
+          "document info",
+          "pdf info",
+          "pdf pages",
+          "document metadata",
+          "mime type"
+        ],
+        "document_extract_text": [
+          "extract text",
+          "read pdf",
+          "read document",
+          "pdf text",
+          "docx text",
+          "pptx text",
+          "xlsx text",
+          "ocr alternative"
+        ],
+        "document_search_text": [
+          "search document",
+          "find in pdf",
+          "find text",
+          "search pdf",
+          "document grep",
+          "clause"
+        ],
+        "document_convert": [
+          "convert document",
+          "pandoc",
+          "docx markdown",
+          "markdown html",
+          "epub",
+          "document format"
+        ],
+        "document_render_pdf_page": [
+          "render pdf",
+          "pdf page image",
+          "pdf screenshot",
+          "visual pdf",
+          "page png",
+          "inspect pdf page"
+        ],
+        "docker_exec": [
+          "docker exec",
+          "run in container",
+          "container command",
+          "inside container",
+          "container shell",
+          "diagnose container"
+        ],
+        "host_network_info": [
+          "host network",
+          "host routes",
+          "host interfaces",
+          "host arp",
+          "host resolver",
+          "host connectivity"
+        ],
+        "openwrt_clients": [
+          "router clients",
+          "connected devices",
+          "dhcp leases",
+          "wifi clients",
+          "lan clients",
+          "arp clients"
+        ],
+        "openwrt_package_query": [
+          "opkg",
+          "openwrt packages",
+          "installed package",
+          "router package",
+          "minidlna installed"
+        ],
+        "image_compare": [
+          "compare images",
+          "image diff",
+          "rmse",
+          "verify image change",
+          "visual diff"
+        ]
+      },
+      "lifecycle": "lazy",
+      "description": "Local infrastructure and processing tools: Docker, Linux host diagnostics, networking, OpenWrt routers, image processing, and document processing. Prefer these dedicated tools over shell/network workarounds."
     },
     "google": {
       "transport": "http",
       "url": "http://mcp-google:8934/mcp",
-      "description": "Google Workspace tools for Gmail, Calendar, and Drive. Credentials remain server-side. Search by capability before use.",
+      "description": "Authorized Google Workspace account tools for Gmail, Google Calendar, and Google Drive. Credentials stay server-side. Use for mailbox search/read/drafts, calendars/events/free-busy, and Drive search/read/download/upload. Writes are separately gated.",
+      "searchKeywords": {
+        "*": [
+          "google workspace",
+          "google account",
+          "gmail",
+          "email",
+          "mailbox",
+          "inbox",
+          "calendar",
+          "schedule",
+          "meeting",
+          "availability",
+          "free busy",
+          "drive",
+          "google drive",
+          "google docs",
+          "google sheets",
+          "google slides",
+          "account auth",
+          "oauth"
+        ],
+        "google_auth_status": [
+          "google auth",
+          "gmail auth",
+          "calendar auth",
+          "drive auth",
+          "oauth status",
+          "google credentials",
+          "token status",
+          "account connected",
+          "authorization"
+        ],
+        "gmail_get_unread_count": [
+          "gmail unread count",
+          "unread email count",
+          "unread inbox count",
+          "how many unread emails",
+          "how many unread messages",
+          "number of unread emails",
+          "number of unread messages",
+          "gmail unread total",
+          "inbox unread total",
+          "count unread mail",
+          "mailbox unread count"
+        ],
+        "gmail_search_messages": [
+          "gmail search",
+          "search email",
+          "find email",
+          "latest email",
+          "recent email",
+          "mail from",
+          "mail subject",
+          "receipt",
+          "notification",
+          "message search",
+          "list unread email",
+          "find unread messages",
+          "inbox messages"
+        ],
+        "gmail_get_message": [
+          "read email",
+          "open email",
+          "email body",
+          "message content",
+          "gmail message",
+          "full email",
+          "message id"
+        ],
+        "gmail_get_thread": [
+          "email thread",
+          "gmail thread",
+          "conversation",
+          "email conversation",
+          "reply context",
+          "thread messages"
+        ],
+        "gmail_list_labels": [
+          "gmail labels",
+          "mail labels",
+          "label ids",
+          "inbox labels",
+          "mailbox folders"
+        ],
+        "gmail_create_draft": [
+          "draft email",
+          "compose email",
+          "create draft",
+          "write email",
+          "reply draft",
+          "gmail draft"
+        ],
+        "gmail_send_draft": [
+          "send draft",
+          "send email",
+          "gmail send",
+          "send prepared email"
+        ],
+        "gmail_modify_labels": [
+          "archive email",
+          "mark read",
+          "mark unread",
+          "star email",
+          "apply label",
+          "remove label",
+          "gmail modify"
+        ],
+        "calendar_list_calendars": [
+          "list calendars",
+          "calendar ids",
+          "my calendars",
+          "google calendars",
+          "calendar list"
+        ],
+        "calendar_list_events": [
+          "calendar events",
+          "schedule",
+          "agenda",
+          "meetings",
+          "appointments",
+          "upcoming events",
+          "today calendar",
+          "events this week",
+          "find event"
+        ],
+        "calendar_get_event": [
+          "event details",
+          "calendar event",
+          "meeting details",
+          "appointment details",
+          "event id"
+        ],
+        "calendar_freebusy": [
+          "free busy",
+          "availability",
+          "available time",
+          "calendar conflict",
+          "scheduling",
+          "meeting window",
+          "busy times"
+        ],
+        "calendar_create_event": [
+          "create event",
+          "add calendar event",
+          "schedule meeting",
+          "new appointment",
+          "book meeting"
+        ],
+        "calendar_update_event": [
+          "update event",
+          "reschedule meeting",
+          "edit calendar event",
+          "change appointment",
+          "move meeting"
+        ],
+        "calendar_delete_event": [
+          "delete event",
+          "cancel event",
+          "remove calendar event",
+          "cancel meeting"
+        ],
+        "drive_search_files": [
+          "search drive",
+          "find drive file",
+          "google drive",
+          "find doc",
+          "find sheet",
+          "find slide",
+          "drive folder",
+          "drive search",
+          "document in drive"
+        ],
+        "drive_get_file_metadata": [
+          "drive file info",
+          "file metadata",
+          "drive metadata",
+          "file id",
+          "drive link",
+          "mime type"
+        ],
+        "drive_read_text": [
+          "read drive file",
+          "read google doc",
+          "read google sheet",
+          "read google slides",
+          "document text",
+          "drive content",
+          "open drive document"
+        ],
+        "drive_download_file": [
+          "download drive file",
+          "export google doc",
+          "export sheet",
+          "export slides",
+          "save drive file",
+          "drive to workspace",
+          "download pdf"
+        ],
+        "drive_create_folder": [
+          "create drive folder",
+          "new drive folder",
+          "make folder in drive"
+        ],
+        "drive_upload_file": [
+          "upload to drive",
+          "save file to drive",
+          "drive upload",
+          "upload document",
+          "upload pdf"
+        ],
+        "drive_delete_file": [
+          "delete drive file",
+          "remove drive file",
+          "delete drive folder",
+          "trash drive item"
+        ]
+      },
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 120000
+    },
+    "security": {
+      "url": "http://mcp-security:8935/mcp",
+      "directTools": false,
+      "exposeResources": false,
+      "requestTimeoutMs": 300000,
+      "description": "Authorized cybersecurity assessment and defensive analysis. Use for red-team reconnaissance/vulnerability detection on private or explicitly allowlisted targets, plus blue-team code/secret/SBOM/malware/PCAP/IDS/log/hardening analysis. No arbitrary shell, password attacks, persistence, or exploit-payload execution.",
+      "searchKeywords": {
+        "*": [
+          "security",
+          "cybersecurity",
+          "red team",
+          "blue team",
+          "pentest",
+          "vulnerability",
+          "reconnaissance",
+          "incident response",
+          "forensics",
+          "malware",
+          "PCAP",
+          "IDS",
+          "SAST",
+          "SBOM",
+          "hardening"
+        ],
+        "security_network_discover": [
+          "network discovery",
+          "discover hosts",
+          "live hosts",
+          "subnet scan",
+          "LAN scan",
+          "asset discovery",
+          "ping sweep",
+          "red team recon"
+        ],
+        "security_port_scan": [
+          "port scan",
+          "open ports",
+          "nmap",
+          "exposed ports",
+          "attack surface",
+          "scan host",
+          "red team recon"
+        ],
+        "security_service_detect": [
+          "service detection",
+          "service fingerprint",
+          "version detection",
+          "nmap -sV",
+          "identify services",
+          "banner fingerprint"
+        ],
+        "security_tls_audit": [
+          "TLS audit",
+          "SSL audit",
+          "sslscan",
+          "weak TLS",
+          "cipher scan",
+          "certificate security",
+          "HTTPS hardening"
+        ],
+        "security_http_headers_audit": [
+          "security headers",
+          "HTTP headers audit",
+          "CSP",
+          "HSTS",
+          "X-Frame-Options",
+          "web hardening",
+          "response headers"
+        ],
+        "security_web_server_audit": [
+          "Nikto",
+          "web server audit",
+          "web vulnerability audit",
+          "server misconfiguration",
+          "exposed files",
+          "web security scan"
+        ],
+        "security_vulnerability_scan": [
+          "Nuclei",
+          "vulnerability scan",
+          "CVE scan",
+          "known vulnerabilities",
+          "web vulnerabilities",
+          "misconfiguration scan",
+          "red team scan"
+        ],
+        "security_web_content_discover": [
+          "ffuf",
+          "content discovery",
+          "directory fuzzing",
+          "hidden paths",
+          "admin paths",
+          "web enumeration",
+          "find endpoints"
+        ],
+        "security_dns_records": [
+          "DNS records",
+          "DNS enumeration",
+          "MX records",
+          "TXT records",
+          "NS records",
+          "domain reconnaissance",
+          "CAA"
+        ],
+        "security_workspace_vuln_scan": [
+          "Trivy",
+          "dependency vulnerabilities",
+          "filesystem vulnerability scan",
+          "IaC scan",
+          "misconfiguration scan",
+          "workspace security",
+          "secret scan"
+        ],
+        "security_secret_scan": [
+          "Gitleaks",
+          "secret scan",
+          "exposed credentials",
+          "committed secrets",
+          "API key leak",
+          "private key leak"
+        ],
+        "security_code_scan": [
+          "Semgrep",
+          "static analysis",
+          "SAST",
+          "code security scan",
+          "insecure code",
+          "application security"
+        ],
+        "security_generate_sbom": [
+          "SBOM",
+          "Syft",
+          "software bill of materials",
+          "package inventory",
+          "dependency inventory"
+        ],
+        "security_yara_scan": [
+          "YARA",
+          "malware rules",
+          "IOC scan",
+          "suspicious file",
+          "artifact scan"
+        ],
+        "security_malware_scan": [
+          "ClamAV",
+          "malware scan",
+          "virus scan",
+          "infected files",
+          "malicious files"
+        ],
+        "security_file_hash": [
+          "file hash",
+          "SHA256",
+          "SHA512",
+          "MD5",
+          "IOC hash",
+          "integrity check"
+        ],
+        "security_file_strings": [
+          "strings",
+          "binary strings",
+          "artifact strings",
+          "malware triage",
+          "embedded domains",
+          "binary inspect"
+        ],
+        "security_pcap_summary": [
+          "PCAP summary",
+          "packet capture analysis",
+          "tshark",
+          "protocol hierarchy",
+          "traffic analysis"
+        ],
+        "security_pcap_conversations": [
+          "PCAP conversations",
+          "top talkers",
+          "TCP conversations",
+          "UDP conversations",
+          "network forensics"
+        ],
+        "security_packet_capture": [
+          "packet capture",
+          "tcpdump",
+          "capture traffic",
+          "PCAP capture",
+          "network capture"
+        ],
+        "security_network_interfaces": [
+          "security interfaces",
+          "capture interfaces",
+          "network interfaces",
+          "routes"
+        ],
+        "security_suricata_analyze_pcap": [
+          "Suricata",
+          "IDS analysis",
+          "PCAP IDS",
+          "network alerts",
+          "intrusion detection",
+          "offline IDS"
+        ],
+        "security_host_log_search": [
+          "security logs",
+          "auth log",
+          "host logs",
+          "authentication failures",
+          "incident logs",
+          "IOC logs"
+        ],
+        "security_workspace_ioc_search": [
+          "IOC search",
+          "indicator search",
+          "find IP",
+          "find domain",
+          "find hash",
+          "incident response search"
+        ],
+        "security_host_audit": [
+          "Lynis",
+          "host audit",
+          "hardening audit",
+          "security baseline",
+          "Linux hardening",
+          "blue team audit"
+        ]
+      },
       "lifecycle": "lazy"
     }
   },

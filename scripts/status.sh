@@ -18,13 +18,19 @@ echo
 echo '== MCP DNS from Pi container =='
 docker compose exec -T pi getent hosts mcp-searxng || echo 'mcp-searxng not found on ai-local'
 docker compose exec -T pi getent hosts mcp-gateway || echo 'mcp-gateway not found on ai-local'
+docker compose exec -T pi getent hosts mcp-system || echo 'mcp-system not found on ai-local'
+docker compose exec -T pi getent hosts mcp-google || echo 'mcp-google not found on ai-local'
+docker compose exec -T pi getent hosts mcp-security || echo 'mcp-security not found on ai-local'
 
 echo
 echo '== MCP TCP endpoints from Pi container =='
 for spec in \
   'mcp-searxng|8888|SearXNG' \
   'mcp-gateway|8931|Playwright' \
-  'mcp-gateway|8932|Memory'; do
+  'mcp-gateway|8932|Memory' \
+  'mcp-system|8933|System' \
+  'mcp-google|8934|Google' \
+  'mcp-security|8935|Security'; do
   IFS='|' read -r host port name <<<"$spec"
   if docker compose exec -T pi bash -lc "exec 3<>/dev/tcp/$host/$port" >/dev/null 2>&1; then
     echo "$name $host:$port reachable"

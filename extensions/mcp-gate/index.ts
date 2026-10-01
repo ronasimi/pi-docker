@@ -31,7 +31,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_search', label: 'MCP search',
-    description: 'Discover tools for any capability absent from the four core tools. Search before claiming unavailable. Returns up to 3 complete schemas. Use server playwright for live page reading, searxng for web search, memory for durable memory. Call matches via mcp_call.',
+    description: 'Discover bounded MCP tools for capabilities not directly provided by core tools. Search before shell/network workarounds when an external, infrastructure, or security capability is needed. Servers: security=authorized red-team/blue-team, vulnerability assessment, reconnaissance, security testing, forensics, malware, packet/log and incident analysis; system=Docker/host/network/OpenWrt/image/document; google=Gmail/Calendar/Drive; playwright=browser interaction/live pages; searxng=public web search; memory=durable memory. Returns up to 3 complete schemas; execute exact matches via mcp_call.',
     parameters: Type.Object({
       query: Type.String({ minLength: 1, maxLength: 200 }),
       server: Type.Optional(Type.String()),

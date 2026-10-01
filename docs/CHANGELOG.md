@@ -1,3 +1,12 @@
+## 2026-09-30 — Security MCP registration and model-neutral routing
+
+- Registered the bounded `security` MCP server at `http://mcp-security:8935/mcp`.
+- Synced high-signal discovery metadata for security, system, Google, browser, web-search, and memory capabilities.
+- Updated `APPEND_SYSTEM.md` to distinguish knowledge questions from runtime-tool execution and route security operations to `security` before generic Bash.
+- Updated the native `mcp_search` description so all six server categories are discoverable to small local models.
+- Extended `scripts/status.sh` to verify DNS and TCP connectivity for System, Google, and Security MCP services from inside the Pi container.
+- Pi remains Dockerized and uses the existing external `ai-local` network; no systemd service or automatic security-model routing is introduced.
+
 # Bounded MCP routing update — 2026-09-30
 
 ## Diagnosis
