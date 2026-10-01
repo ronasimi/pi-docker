@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import { Type } from 'typebox';
 import { createMcpAdapter } from 'pi-mcp-adapter';
 import { ALLOWED_TOOLS, BoundedGate, gateConfig } from './gate.mjs';
+import { installWhiteRabbitReasoning } from './reasoning.mjs';
 
 export default function boundedMcp(pi: any) {
+  installWhiteRabbitReasoning(pi);
   const configPath = process.env.PI_MCP_CONFIG || '/etc/pi/mcp.json';
   const config = gateConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')));
   let proxy: any;
@@ -23,8 +25,13 @@ export default function boundedMcp(pi: any) {
     return proxy.execute(`bounded-mcp-${++callId}`, args, signal, undefined, context);
   });
   const enforce = () => pi.setActiveTools(pi.getActiveTools().filter((name: string) => ALLOWED_TOOLS.includes(name)));
-  pi.on('session_start', enforce);
-  pi.on('before_agent_start', () => { enforce(); gate.reset(); });
+  const restore = (_event: any, ctx: any) => {
+    enforce();
+    gate.restore(ctx.sessionManager.getBranch());
+  };
+  pi.on('session_start', restore);
+  pi.on('session_tree', restore);
+  pi.on('before_agent_start', () => { enforce(); gate.beginTurn(); });
   pi.on('turn_start', enforce);
   pi.on('tool_call', (event: any) => {
     if (!ALLOWED_TOOLS.includes(event.toolName)) return { block: true, reason: 'Optional native tools are disabled. Use mcp_search to discover the capability, then mcp_call.' };
@@ -44,7 +51,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool returned by mcp_search in this user turn. Supply args matching its schema. Do not call discovered MCP names as native functions. Failed identical calls are blocked; change inputs or discover an alternative.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Reuse discovered tools across follow-up messages and for status polling. Supply args matching its schema. Explicit retries are allowed; avoid unproductive loops and duplicate writes. If discovery is required, search the capability and retry. Do not call discovered MCP names as native functions.',
     parameters: Type.Object({
       tool: Type.String(),
       args: Type.Optional(Type.Union([Type.Object({}, { additionalProperties: true }), Type.String()])),

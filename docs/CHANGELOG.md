@@ -1,3 +1,19 @@
+# 2026-10-01 — Repeated MCP calls and follow-up recovery
+
+- The attached session's Arachne status and Anansi client calls were blocked because discovery was reset before each user message. The router tools were not attempted.
+- Retain up to 64 discovered tool identifiers across follow-ups, refreshing their recency after successful calls. Restore discovery from successful searches on the active branch when a chat is reopened, reloaded or navigated; exclude unrelated chats and abandoned branches.
+- Remove identical-failure and identical-output blacklists so explicit retries and status polling reach the adapter. Keep per-message budgets, live argument validation, configured approvals, and disabled-server checks. Failed operations are never automatically replayed by the gate.
+- Explain missing discovery accurately and instruct the model to search and retry the requested action in the same turn.
+- All 22 Pi regression tests pass, including real SDK follow-ups, repeated identical results, transient failure recovery, reload, and branch isolation. The six native tool names remain unchanged. Both calls blocked in the attached session also reach a local fixture after restoring that session's history.
+
+# 2026-10-01 — WhiteRabbitNeo analysis and security suite
+
+- Enable WhiteRabbitNeo's Pi thinking level on session start, model selection and turn preflight.
+- Detect native Ollama thinking; V3 uses prompted analysis without unsupported reasoning API parameters.
+- Respect configured Ollama `num_ctx` and add the security-agent fallback entry.
+- Add discovery aliases for the 43-tool security MCP catalog; retain six native tools.
+- Verify real Pi SDK outgoing requests for both prompted and native reasoning modes.
+
 ## 2026-09-30 — Security MCP registration and model-neutral routing
 
 - Registered the bounded `security` MCP server at `http://mcp-security:8935/mcp`.

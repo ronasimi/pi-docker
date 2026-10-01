@@ -8,13 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { ALLOWED_TOOLS } from '../gate.mjs';
 
-test('real Pi SDK + adapter: cold HTTP discovery, argument validation, loop guard, fixed provider schemas, new-turn gate', { timeout: 60000 }, async () => {
+test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reload and branch isolation', { timeout: 60000 }, async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-gate-integration-'));
   const oldConfig = process.env.PI_MCP_CONFIG;
   const oldAgentDir = process.env.PI_CODING_AGENT_DIR;
   const requests = [];
   const toolCalls = [];
   let step = 0;
+  let failNext = false;
   const scripted = [
     ['mcp_call', { tool: 'playwright_browser_navigate', args: { url: 'https://example.com' } }],
     ['mcp_search', { query: 'browser_navigate', server: 'playwright' }],
@@ -29,7 +30,8 @@ test('real Pi SDK + adapter: cold HTTP discovery, argument validation, loop guar
     const input = JSON.parse(body);
     if (req.url === '/v1/chat/completions') {
       requests.push(input);
-      const current = scripted[step++];
+      const current = scripted.shift();
+      step++;
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const send = value => res.write(`data: ${JSON.stringify(value)}\n\n`);
       const base = { id: 'mock-' + step, object: 'chat.completion.chunk', created: 1, model: 'gate-test' };
@@ -44,7 +46,9 @@ test('real Pi SDK + adapter: cold HTTP discovery, argument validation, loop guar
     if (input.method === 'tools/list') result = { tools: [{ name: 'browser_navigate', description: 'Navigate to a website and read its live snapshot.', inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false } }] };
     if (input.method === 'tools/call') {
       toolCalls.push(input.params);
-      result = { content: [{ type: 'text', text: 'LIVE SNAPSHOT: Five current article titles with links.' }] };
+      result = failNext ? { isError: true, content: [{ type: 'text', text: 'temporary service failure' }] }
+        : { content: [{ type: 'text', text: 'LIVE SNAPSHOT: Five current article titles with links.' }] };
+      failNext = false;
     }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ jsonrpc: '2.0', id: input.id, result }));
@@ -83,14 +87,38 @@ test('real Pi SDK + adapter: cold HTTP discovery, argument validation, loop guar
     assert.equal(results[2].isError, true);
     assert.equal(results[3].isError, true);
     assert.equal(results[4].isError, false);
-    assert.match(JSON.stringify(results[3].content), /already failed/);
-    // Existing grants must not leak into a follow-up user turn.
-    scripted.push(null, ['mcp_call', { tool: 'playwright_browser_navigate', args: { url: 'https://example.com' } }]);
+    assert.doesNotMatch(JSON.stringify(results[3].content), /already failed/);
+    // Follow-ups retain discovery; identical successful output is not an error.
+    const repeat = ['mcp_call', { tool: 'playwright_browser_navigate', args: { url: 'https://example.com' } }];
+    scripted.push(repeat, repeat, repeat);
     await session.prompt('Read it again.');
-    assert.equal(toolCalls.length, 1);
+    assert.equal(toolCalls.length, 4);
+    assert.ok(session.state.messages.filter(m => m.role === 'toolResult').slice(-3).every(m => !m.isError));
+    // A failed execution is reported, and one explicit retry reaches MCP.
+    failNext = true;
+    scripted.push(repeat, repeat);
+    await session.prompt('Check the page; retry once if the service is temporarily unavailable.');
+    assert.equal(toolCalls.length, 6);
+    const retried = session.state.messages.filter(m => m.role === 'toolResult').slice(-2);
+    assert.equal(retried[0].isError, true);
+    assert.match(JSON.stringify(retried[0].content), /temporary service failure/);
+    assert.equal(retried[1].isError, false);
+    // Reinitialize the real adapter/gate from the active branch as on resume.
+    await session.extensionRunner.emit({ type: 'session_start', reason: 'reload' });
+    scripted.push(repeat);
+    await session.prompt('Read it after reload.');
+    assert.equal(toolCalls.length, 7);
+    assert.equal(session.state.messages.filter(m => m.role === 'toolResult').at(-1).isError, false);
+    // Going back before discovery cannot inherit grants from an abandoned branch.
+    const firstUser = session.sessionManager.getBranch().find(e => e.type === 'message' && e.message.role === 'user');
+    await session.navigateTree(firstUser.id);
+    scripted.push(repeat);
+    await session.prompt('Read it in this new branch.');
+    assert.equal(toolCalls.length, 7);
     const latest = session.state.messages.filter(m => m.role === 'toolResult').at(-1);
     assert.equal(latest.isError, true);
     assert.match(JSON.stringify(latest.content), /not discovered/);
+    for (const request of requests) assert.deepEqual(request.tools.map(t => t.function.name).sort(), [...ALLOWED_TOOLS].sort());
   } finally {
     if (session) { await session.extensionRunner?.emit({ type: 'session_shutdown', reason: 'exit' }); session.dispose(); }
     if (oldConfig === undefined) delete process.env.PI_MCP_CONFIG; else process.env.PI_MCP_CONFIG = oldConfig;

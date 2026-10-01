@@ -19,6 +19,8 @@ services:
       - "127.0.0.1:${PI_WEB_PORT:-8787}:8787"
 
     environment:
+      PI_WHITERABBIT_THINKING_LEVEL: ${PI_WHITERABBIT_THINKING_LEVEL:-medium}
+      PI_WHITERABBIT_REASONING: ${PI_WHITERABBIT_REASONING:-true}
       PI_CODING_AGENT_DIR: /home/pi/.pi/agent
       PI_WEB_DATA_DIR: /home/pi/.pi-web
       PI_WEB_CWD: /workspace

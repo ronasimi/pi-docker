@@ -856,8 +856,8 @@
       "url": "http://mcp-security:8935/mcp",
       "directTools": false,
       "exposeResources": false,
-      "requestTimeoutMs": 300000,
-      "description": "Authorized cybersecurity assessment and defensive analysis. Use for red-team reconnaissance/vulnerability detection on private or explicitly allowlisted targets, plus blue-team code/secret/SBOM/malware/PCAP/IDS/log/hardening analysis. No arbitrary shell, password attacks, persistence, or exploit-payload execution.",
+      "requestTimeoutMs": 330000,
+      "description": "Security CLI suite: authorized reconnaissance, OSINT, SQL injection assessment, Metasploit modules and listeners, plus log/PCAP/IDS, endpoint and binary forensics. Tools are discovered through bounded MCP search.",
       "searchKeywords": {
         "*": [
           "security",
@@ -874,7 +874,17 @@
           "IDS",
           "SAST",
           "SBOM",
-          "hardening"
+          "hardening",
+          "Firecrawl",
+          "Subfinder",
+          "Searchsploit",
+          "sqlmap",
+          "Metasploit",
+          "Netcat",
+          "Socat",
+          "jq",
+          "osquery",
+          "Radare2"
         ],
         "security_network_discover": [
           "network discovery",
@@ -1076,6 +1086,118 @@
           "security baseline",
           "Linux hardening",
           "blue team audit"
+        ],
+        "security_tool_status": [
+          "security tools installed",
+          "security status",
+          "tool versions",
+          "capabilities"
+        ],
+        "security_firecrawl_scrape": [
+          "Firecrawl",
+          "scrape markdown",
+          "OSINT scrape",
+          "web scraping"
+        ],
+        "security_firecrawl_map": [
+          "Firecrawl map",
+          "site map",
+          "discover website URLs",
+          "OSINT map"
+        ],
+        "security_subdomain_enum": [
+          "Subfinder",
+          "Amass",
+          "passive subdomains",
+          "subdomain enumeration",
+          "OSINT domains"
+        ],
+        "security_exploit_search": [
+          "Searchsploit",
+          "Exploit-DB",
+          "CVE exploit search",
+          "service version exploits"
+        ],
+        "security_exploit_source": [
+          "Searchsploit source",
+          "exploit source",
+          "EDB source code"
+        ],
+        "security_sqlmap": [
+          "sqlmap",
+          "SQL injection",
+          "database enumeration",
+          "batch SQL test"
+        ],
+        "security_metasploit_info": [
+          "Metasploit module options",
+          "msfconsole info",
+          "exploit module help"
+        ],
+        "security_metasploit_run": [
+          "Metasploit",
+          "msfconsole",
+          "run exploit",
+          "check exploit",
+          "resource script"
+        ],
+        "security_listener_start": [
+          "Netcat",
+          "nc",
+          "Socat",
+          "listener",
+          "reverse shell callback"
+        ],
+        "security_job_status": [
+          "job output",
+          "listener output",
+          "Metasploit progress",
+          "poll job"
+        ],
+        "security_job_send": [
+          "send listener input",
+          "Netcat input",
+          "Socat connection"
+        ],
+        "security_job_stop": [
+          "stop listener",
+          "cancel job",
+          "stop Metasploit"
+        ],
+        "security_jq": [
+          "jq",
+          "JSON filter",
+          "JSONL log analysis",
+          "CloudTrail",
+          "Zeek",
+          "Suricata logs"
+        ],
+        "security_pcap_fields": [
+          "Tshark fields",
+          "Wireshark display filter",
+          "packet fields",
+          "PCAP extract"
+        ],
+        "security_suricata_test_rules": [
+          "Suricata test rules",
+          "IDS rule validation",
+          "rule hit rate",
+          "PCAP rule replay"
+        ],
+        "security_osquery": [
+          "osquery",
+          "SQL endpoint query",
+          "listening_ports",
+          "process hunt",
+          "cron jobs"
+        ],
+        "security_binary_analyze": [
+          "Radare2",
+          "r2",
+          "binary disassembly",
+          "opcodes",
+          "reverse engineering",
+          "malware functions"
         ]
       },
       "lifecycle": "lazy"

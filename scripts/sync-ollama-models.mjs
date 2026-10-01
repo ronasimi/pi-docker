@@ -47,6 +47,10 @@ async function loadOverrides() {
 }
 
 function findContextLength(model, show) {
+  // Ollama's configured allocation takes precedence over the architecture's
+  // training limit (security-agent:7b is configured with 16384, not 32768).
+  const configured = Number(/^num_ctx\s+(\d+)/m.exec(show?.parameters || '')?.[1] || 0);
+  if (configured > 0) return configured;
   const direct = Number(model?.details?.context_length || show?.details?.context_length || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
 
@@ -104,7 +108,19 @@ async function main() {
     tags = await getTagsWithRetry();
   } catch (error) {
     try {
-      await fs.access(outputPath);
+      const cached = JSON.parse(await fs.readFile(outputPath, 'utf8'));
+      let changed = false;
+      for (const model of cached.providers?.ollama?.models ?? []) {
+        if (/white[-_]?rabbit[-_]?neo|^security-agent(?::|$)/i.test(model.id) && !model.reasoning) {
+          model.reasoning = true;
+          model.compat = { ...model.compat, supportsReasoningEffort: false };
+          changed = true;
+        }
+      }
+      if (changed) {
+        await fs.writeFile(`${outputPath}.tmp`, JSON.stringify(cached,null,2)+'\n', {mode:0o600});
+        await fs.rename(`${outputPath}.tmp`,outputPath);
+      }
       console.error(`[pi] Ollama discovery failed (${error.message}); keeping existing ${outputPath}`);
       return;
     } catch {
@@ -122,7 +138,13 @@ async function main() {
   for (const model of visibleTagModels) {
     const detected = await enrich(model);
     const override = overrides?.models?.[model.name] || overrides?.[model.name] || {};
-    discovered.push({ ...detected, ...override, id: model.name });
+    const merged = { ...detected, ...override, id: model.name };
+    if (/white[-_]?rabbit[-_]?neo|^security-agent(?::|$)/i.test(model.name)) {
+      merged.reasoning = true;
+      merged.compat = { ...override.compat, supportsReasoningEffort: detected.reasoning };
+      console.error(`[pi] ${model.name}: ${detected.reasoning ? 'native thinking supported' : 'prompted reasoning; native Ollama thinking unsupported'}`);
+    }
+    discovered.push(merged);
   }
 
   discovered.sort((a, b) => {

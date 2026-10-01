@@ -33,14 +33,16 @@ Use the actual name returned by search. The model must not issue it as a native 
 |---|---:|
 | Search results | Default and maximum 3 |
 | Search response | At most 16 KiB, complete schemas only |
-| Retained discovered tools | 8 per user turn, oldest evicted first |
+| Retained discovered tools | 64 identifiers per conversation branch, least recently used evicted first |
 | Search calls | 6 per user turn |
 | MCP executions | 24 per user turn |
 | MCP text result guard | 12 KiB / 300 lines; full output spills to a local file |
 
-Search accepts a server filter, a smaller limit, and an offset. Oversized schemas are reported and never silently truncated into a callable tool. MCP metadata is cached by the adapter; discovery grants reset at the next user turn. Repeating a failed call with identical arguments is blocked. Two identical successful outputs also block a third identical call to stop loops without progress. This guard is local to one user turn.
+Search accepts a server filter, a smaller limit, and an offset. Oversized schemas are reported and never silently truncated into a callable tool. Discovery survives follow-up messages and is restored from successful search results on the active conversation branch when a chat is reopened or reloaded. A new chat starts with no discovered tools. Only identifiers are retained; no extra schemas are added to the standing prompt. Disabled or removed servers remain unavailable.
 
-Discovery uses the adapter's local keyword ranking; it does not call a second model, Jev, or an embedding service. No complete MCP catalog is injected into the standing prompt. Large previous conversations can still carry old schemas/results: start a new chat after upgrading.
+Repeated status calls, unchanged successful results, and explicit retries are allowed. The gate never automatically replays a failed operation, which could already have changed state. Search and execution budgets still reset for each user message; failures count toward the execution budget. The adapter continues to validate arguments and enforce configured approvals. If discovery has been evicted, search for the requested action and retry in the same turn; that error is not evidence of a target failure.
+
+Discovery uses the adapter's local keyword ranking; it does not call a second model, Jev, or an embedding service. No complete MCP catalog is injected into the standing prompt. Existing chats can be reopened after upgrading; their successful historical discovery is restored. Start a new chat if you want to discard old context.
 
 ## Requirements and startup
 
@@ -80,7 +82,7 @@ Dependencies are installed at image build time. Container startup only applies t
 - `config/APPEND_SYSTEM.md` contains routing instructions.
 - `config/models-overrides.json` retains your model metadata overrides.
 
-Ollama model discovery and the existing 64K aliases are unchanged. On startup, `/api/tags` and `/api/show` generate the model catalog; `PI_OLLAMA_CONTEXT_CAP` defaults to 65536 and `PI_OLLAMA_MAX_TOKENS` to 4096. The provider's context metadata does not itself change Ollama's runtime context; the existing alias script does that.
+Ollama model discovery retains the existing 64K aliases and now respects configured `num_ctx` values. On startup, `/api/tags` and `/api/show` generate the model catalog; `PI_OLLAMA_CONTEXT_CAP` defaults to 65536 and `PI_OLLAMA_MAX_TOKENS` to 4096. The provider's context metadata does not itself change Ollama's runtime context; the existing alias script does that.
 
 Settings backups are `data/pi/agent/settings.json.before-mcp-gate` and `data/web/client-state.json.before-mcp-gate`. Migration is idempotent and preserves chats, model settings, and permission presets. Use `scripts/migrate-volumes-to-bind.sh` first if migrating from older named volumes.
 
@@ -103,3 +105,7 @@ Start a **new chat** and ask:
 Expected: `mcp_search` → `mcp_call`; no `browser_page`, direct `searxng_search`, or `mcpScript`. If a gateway is unavailable, the response should identify that server's connection error.
 
 See `docs/CHANGELOG.md` for the diagnosis and validation limits.
+
+## WhiteRabbitNeo reasoning
+
+WhiteRabbitNeo V3 uses the prompted-analysis fallback; it has no native Ollama thinking channel. Pi enables its reasoning level and avoids unsupported API flags. Models advertising native thinking use it. See [configuration and verification](docs/WHITERABBIT-REASONING.md).

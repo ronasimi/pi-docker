@@ -38,28 +38,33 @@ test('cold search connects selected server, clamps limit, returns complete schem
   await gate.search({ query: 'navigate', server: 'playwright' });
   assert.equal(calls.filter(c => c.connect).length, 1);
 });
-test('call before search and call after a new user turn fail before transport', async () => {
+test('discovery survives follow-up turns but a new conversation requires discovery', async () => {
   const { gate, calls } = fixture();
   await assert.rejects(gate.call({ tool: 'invented' }), /not discovered/);
   await gate.search({ query: 'navigate' });
+  gate.beginTurn();
+  assert.equal(gate.searches, 0);
+  await gate.call({ tool: 'navigate_0' });
   gate.reset();
   await assert.rejects(gate.call({ tool: 'navigate_0' }), /not discovered/);
-  assert.equal(calls.filter(c => c.tool).length, 0);
-});
-test('failed identical call is blocked even after search and differently ordered JSON keys', async () => {
-  const { gate, calls } = fixture({ fail: true });
-  await gate.search({ query: 'navigate' });
-  await assert.rejects(gate.call({ tool: 'navigate_0', args: { url: 'x', a: 1 } }), /bridge unavailable/);
-  await gate.search({ query: 'navigate' });
-  await assert.rejects(gate.call({ tool: 'navigate_0', args: { a: 1, url: 'x' } }), /already failed/);
   assert.equal(calls.filter(c => c.tool).length, 1);
 });
-test('unchanged successful results stop a no-progress loop on the third identical call', async () => {
-  const { gate } = fixture();
+test('an explicit identical retry reaches the server after recovery without automatic replay', async () => {
+  const options = { fail: true };
+  const { gate, calls } = fixture(options);
   await gate.search({ query: 'navigate' });
-  await gate.call({ tool: 'navigate_0' });
-  await gate.call({ tool: 'navigate_0' });
-  await assert.rejects(gate.call({ tool: 'navigate_0' }), /already failed/);
+  await assert.rejects(gate.call({ tool: 'navigate_0', args: { url: 'x', a: 1 } }), /bridge unavailable/);
+  assert.equal(calls.filter(c => c.tool).length, 1);
+  options.fail = false;
+  await gate.call({ tool: 'navigate_0', args: { a: 1, url: 'x' } });
+  assert.equal(calls.filter(c => c.tool).length, 2);
+  assert.equal(calls.filter(c => c.connect === 'playwright').length, 2);
+});
+test('unchanged successful status results can be polled repeatedly', async () => {
+  const { gate, calls } = fixture();
+  await gate.search({ query: 'navigate' });
+  for (let i = 0; i < 4; i++) await gate.call({ tool: 'navigate_0' });
+  assert.equal(calls.filter(c => c.tool).length, 4);
 });
 test('oversized schema is never truncated into a callable grant', async () => {
   const { gate } = fixture({ schemaSize: LIMITS.discoveryBytes + 10 });
@@ -74,15 +79,74 @@ test('offline servers are errors and cannot grant stale cached schemas', async (
   assert.equal(result.tools.length, 0);
   assert.equal(result.errors[0].server, 'playwright');
 });
-test('grant cache, per-turn budgets, and argument types are bounded', async () => {
-  const { gate } = fixture();
-  for (let i = 0; i < 6; i++) await gate.search({ query: 'nav' + i });
-  assert.equal(gate.grants.size, 8);
+test('per-turn budgets and argument types remain bounded with identical calls', async () => {
+  const { gate, calls } = fixture();
+  for (let i = 0; i < LIMITS.searches; i++) await gate.search({ query: 'nav' + i });
   await assert.rejects(gate.search({ query: 'more' }), /budget/);
-  await assert.rejects(gate.call({ tool: 'nav0_0' }), /not discovered/);
   await assert.rejects(gate.call({ tool: 'nav5_0', args: [] }), /JSON object/);
-  gate.calls = 24;
+  for (let i = 0; i < LIMITS.calls; i++) await gate.call({ tool: 'nav5_0' });
   await assert.rejects(gate.call({ tool: 'nav5_0' }), /budget/);
+  assert.equal(calls.filter(c => c.tool).length, LIMITS.calls);
+  gate.beginTurn();
+  await gate.call({ tool: 'nav5_0' });
+});
+test('failed retries also consume the per-turn execution budget', async () => {
+  const { gate, calls } = fixture({ fail: true });
+  await gate.search({ query: 'navigate' });
+  for (let i = 0; i < LIMITS.calls; i++) await assert.rejects(gate.call({ tool: 'navigate_0' }), /bridge unavailable/);
+  await assert.rejects(gate.call({ tool: 'navigate_0' }), /budget/);
+  assert.equal(calls.filter(c => c.tool).length, LIMITS.calls);
+});
+test('session discovery uses a bounded LRU refreshed by successful calls', async () => {
+  const { gate } = fixture();
+  for (let i = 0; i < LIMITS.grants; i++) {
+    gate.beginTurn();
+    await gate.search({ query: 'nav' + i, limit: 1 });
+  }
+  await gate.call({ tool: 'nav0_0' });
+  await gate.search({ query: 'new', limit: 1 });
+  assert.equal(gate.grants.size, LIMITS.grants);
+  assert.ok(gate.grants.has('nav0_0'));
+  await assert.rejects(gate.call({ tool: 'nav1_0' }), /not discovered/);
+});
+test('restoring a conversation reconnects and keeps successful historical discovery only', async () => {
+  const { gate, calls } = fixture();
+  const found = await gate.search({ query: 'navigate', server: 'playwright', limit: 1 });
+  const entry = (role, toolName, content, extra = {}) => ({ type: 'message', message: { role, toolName, content, ...extra } });
+  const invented = [{ type: 'text', text: JSON.stringify({ tools: [{ tool: 'invented', server: 'playwright', inputSchema: {} }] }) }];
+  gate.restore([
+    entry('toolResult', 'mcp_search', found.content),
+    entry('user', 'mcp_search', invented),
+    entry('toolResult', 'mcp_call', invented),
+    entry('toolResult', 'mcp_search', invented, { isError: true }),
+    entry('toolResult', 'mcp_search', [{ type: 'text', text: '{broken' }]),
+  ]);
+  assert.equal(gate.connected.size, 0);
+  await gate.call({ tool: 'navigate_0' });
+  assert.equal(calls.filter(c => c.connect).length, 2);
+  await assert.rejects(gate.call({ tool: 'invented' }), /not discovered/);
+  gate.restore([]); // Switching to an empty branch/chat cannot inherit discovery.
+  await assert.rejects(gate.call({ tool: 'navigate_0' }), /not discovered/);
+});
+test('cached and historical discovery cannot execute a disabled or removed server', async () => {
+  const { gate, calls } = fixture();
+  const found = await gate.search({ query: 'navigate', server: 'playwright' });
+  gate.config.mcpServers.playwright.disabled = true;
+  await assert.rejects(gate.call({ tool: 'navigate_0' }), /no longer enabled/);
+  const branch = [{ type: 'message', message: { role: 'toolResult', toolName: 'mcp_search', ...found } }];
+  gate.restore(branch);
+  assert.equal(gate.grants.size, 0);
+  delete gate.config.mcpServers.playwright;
+  gate.restore(branch);
+  assert.equal(gate.grants.size, 0);
+  assert.equal(calls.filter(c => c.tool).length, 0);
+});
+test('cancelled calls preserve discovery for a later explicit retry', async () => {
+  const { gate, calls } = fixture();
+  await gate.search({ query: 'navigate' });
+  await assert.rejects(gate.call({ tool: 'navigate_0' }, AbortSignal.abort(new Error('cancelled'))), /cancelled/);
+  await gate.call({ tool: 'navigate_0' });
+  assert.equal(calls.filter(c => c.tool).length, 1);
 });
 test('duplicate structuredContent wrapper does not double model output', () => {
   const value = '{"results":["headline"]}';
