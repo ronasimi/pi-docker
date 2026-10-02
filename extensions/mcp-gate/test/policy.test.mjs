@@ -9,6 +9,19 @@ import { ALLOWED_TOOLS } from '../gate.mjs';
 const webPackage = process.env.PI_WEB_PACKAGE_DIR;
 const scripts = fileURLToPath(new URL('../../../scripts/', import.meta.url));
 
+
+test('system prompt enforces multi-step completion and evidence grounding', async () => {
+  const promptPath = fileURLToPath(new URL('../../../config/APPEND_SYSTEM.md', import.meta.url));
+  const prompt = await fs.readFile(promptPath, 'utf8');
+  assert.match(prompt, /## Multi-step MCP completion/);
+  assert.match(prompt, /never a complete server catalog/i);
+  assert.match(prompt, /Search each still-outstanding capability separately before finalizing/i);
+  assert.match(prompt, /## Evidence grounding/);
+  assert.match(prompt, /Unknown stays unknown/i);
+  assert.match(prompt, /do not infer a remote host's wired\/wireless attachment/i);
+  assert.match(prompt, /HE\/NSS\/GI are PHY fields/i);
+});
+
 test('published Web UI allowlist preserves restrictive presets and blocks optional reactivation', { skip: !webPackage }, async () => {
   const { applyAgentToolsGating, setAgentToolEnabled, defaultDisabledAgentTools, AGENT_TOOL_CATALOG, filterToolsByPreset } = await import(pathToFileURL(path.join(webPackage, 'dist/server/tool-manager.js')));
   let active = [...ALLOWED_TOOLS, 'browser_page', 'searxng_search', 'mcpScript'];

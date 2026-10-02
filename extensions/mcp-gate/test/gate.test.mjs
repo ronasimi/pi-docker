@@ -143,6 +143,10 @@ test('cold search connects selected server, clamps limit, returns complete schem
   const value = JSON.parse(result.content[0].text);
   assert.equal(value.tools.length, 3);
   assert.deepEqual(value.tools[0].inputSchema.required, ['url']);
+  assert.equal(value.resultScope, 'query_matches_not_server_catalog');
+  assert.equal(value.catalogComplete, false);
+  assert.match(value.instruction, /not a server catalog/i);
+  assert.match(value.instruction, /different outstanding capability/i);
   assert.equal(calls.filter(c => c.connect).length, 1);
   assert.equal(calls.find(c => c.search).limit, LIMITS.serverCandidates);
   await gate.call({ tool: value.tools[0].tool, args: '{"url":"https://example.com"}' });

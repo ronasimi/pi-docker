@@ -76,7 +76,12 @@ test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reloa
     assert.ok(searchTool, 'mcp_search schema is exposed');
     assert.match(searchTool.function.description, /server=security/);
     assert.match(searchTool.function.description, /hasMore\/nextOffset/);
-    assert.match(searchTool.function.description, /Validate schema fit/);
+    assert.match(searchTool.function.description, /not a server catalog/i);
+    assert.match(searchTool.function.description, /different outstanding capability/i);
+    const callTool = requests[0].tools.find(t => t.function.name === 'mcp_call');
+    assert.ok(callTool, 'mcp_call schema is exposed');
+    assert.match(callTool.function.description, /successful call completes only that capability/i);
+    assert.match(callTool.function.description, /multi-step requests/i);
     assert.equal(toolCalls.length, 1, 'only the correctly validated, discovered call reaches MCP');
     assert.equal(toolCalls[0].name, 'browser_navigate');
     assert.deepEqual(toolCalls[0].arguments, { url: 'https://example.com' });

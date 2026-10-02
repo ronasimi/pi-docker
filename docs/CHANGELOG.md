@@ -1,3 +1,6 @@
+- Add a multi-step MCP completion contract: each explicitly requested capability must either complete successfully or receive its own exhausted discovery before the model may finalize.
+- Mark every `mcp_search` result as query-scoped (`catalogComplete: false`) and explicitly warn that a search result is not a complete server catalog.
+- Add evidence-grounding rules for unknown/not-tested states and network-specific inference errors (remote wired/wireless attachment, L2 observation, Wi-Fi HE/NSS/GI, single-sample stability).
 # 2026-10-01 — WhiteRabbitNeo bounded discovery continuation hardening
 - Harden `mcp_call` for small local models that serialize an empty argument object as an exact discovered tool name plus `{}`; normalize only that unambiguous suffix and keep arbitrary/fuzzy tool-name repair disabled.
 

@@ -2,6 +2,11 @@
 
 Containerized Pi + Pi Web UI, using your existing Ollama and MCP services.
 
+## Multi-step MCP completion
+
+The bounded gate treats every `mcp_search` as query-scoped rather than a catalog listing. For requests with multiple explicit operations, each capability must either have a successful relevant call or its own exhausted discovery before the model finalizes. The system prompt also requires evidence-grounded synthesis: unknown and not-tested values remain unknown, and network reports may not infer remote attachment media, topology links, Wi-Fi security from HE/NSS/GI, or stability from a single sample.
+
+
 ## Tool surface
 
 The model receives exactly these tools in the standard agent preset:

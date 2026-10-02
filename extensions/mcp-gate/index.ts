@@ -38,7 +38,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_search', label: 'MCP search',
-    description: 'Discover bounded MCP tools for capabilities not directly provided by core tools. Security work should use server=security; the gate also strongly infers security routing when that filter is omitted. Returns up to 3 complete schemas plus hasMore/nextOffset for bounded continuation. Validate schema fit before execution and use mcp_call only with an exact returned tool.',
+    description: 'Discover bounded MCP tools for one capability query. Security work should use server=security; the gate also strongly infers security routing when omitted. Returns up to 3 ranked schemas plus hasMore/nextOffset. Results are query matches, not a server catalog: for a different outstanding capability, search again before claiming it is unavailable. Validate schema fit and call only an exact returned tool.',
     executionMode: 'sequential',
     parameters: Type.Object({
       query: Type.String({ minLength: 1, maxLength: 200 }),
@@ -52,7 +52,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and its arguments separately in args. For an empty schema use {tool: \"exact_name\", args: {}}; never append {} to the tool name. Reuse discovered tools across follow-up messages and status polling. If a result is partial, truncated, paginated, or reports hasMore, continue with its returned cursor/offset or a dedicated summary tool before concluding.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and arguments separately in args; for no arguments use {tool: \"exact_name\", args: {}} and never append {} to the name. Reuse discovered tools across follow-ups. A successful call completes only that capability: on multi-step requests, continue searching/calling every other explicit requested capability before finalizing. Continue partial/paginated results before concluding.',
     executionMode: 'sequential',
     parameters: Type.Object({
       tool: Type.String(),

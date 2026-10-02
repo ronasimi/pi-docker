@@ -283,8 +283,9 @@ export class BoundedGate {
     }
 
     const output = { tools: [], errors, omitted: [], hasMore: false, nextOffset: null,
+      resultScope: 'query_matches_not_server_catalog', catalogComplete: false,
       ...(inferredServer ? { routedServer: inferredServer } : {}),
-      instruction: 'Validate that a returned schema fits the requested action before calling it. If none fits and hasMore is true, call mcp_search again with the same query/server and offset=nextOffset. Otherwise refine the capability query once. Call mcp_call only with an exact returned tool and matching args.' };
+      instruction: 'These are ranked matches for this capability query only, not a server catalog. Validate schema fit before calling. If none fits and hasMore is true, continue the same query/server with offset=nextOffset; otherwise refine this capability once. For a different outstanding capability in a multi-step request, run a separate mcp_search before claiming it is unavailable. Call mcp_call only with an exact returned tool and matching args.' };
     let cursor = offset;
     while (output.tools.length < limit) {
       if (cursor >= state.matches.length) {
