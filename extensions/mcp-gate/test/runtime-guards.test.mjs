@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { THINKING_CONTINUATION_MESSAGE, isThinkingOnlyAssistant, thinkingOnlyBoundaryResult } from '../runtime-guards.mjs';
+import { THINKING_CONTINUATION_MESSAGE, WORKFLOW_CONTINUATION_LIMIT, isThinkingOnlyAssistant, thinkingOnlyBoundaryResult, workflowContinuationBoundaryResult } from '../runtime-guards.mjs';
 
 const thinking = (text = 'I should call the discovered map tool now.') => ({
   role: 'assistant',
@@ -36,4 +36,35 @@ test('does not continue aborted/error or ordinary completed answers', () => {
   assert.equal(thinkingOnlyBoundaryResult({ ...base, outcome: 'aborted' }, false), undefined);
   assert.equal(thinkingOnlyBoundaryResult({ ...base, outcome: 'error' }, false), undefined);
   assert.equal(thinkingOnlyBoundaryResult({ outcome: 'completed', entries: [], context: { canContinue: true, contextMessages: [{ role: 'assistant', content: [{ type: 'text', text: 'final' }], stopReason: 'stop' }] } }, false), undefined);
+});
+
+
+test('incomplete network workflow settlement is continued before finalization', () => {
+  const event = {
+    outcome: 'completed',
+    entries: [],
+    context: { contextMessages: [{ role: 'assistant', content: [{ type: 'text', text: 'Partial final answer.' }], stopReason: 'stop' }] },
+  };
+  const status = [
+    { stage: 'host network state', tool: 'security_get_host_interface_info', query: 'host network interface state', status: 'completed', discovered: true },
+    { stage: 'network discovery and enumeration', tool: 'security_perform_network_discovery', query: 'comprehensive network discovery', status: 'outstanding', discovered: false },
+    { stage: 'network topology', tool: 'security_analyze_network_topology', query: 'network topology analysis', status: 'outstanding', discovered: true },
+  ];
+  const result = workflowContinuationBoundaryResult(event, status, 0);
+  assert.equal(result.continue, true);
+  assert.equal(result.entries[0].display, false);
+  assert.match(result.entries[0].content, /network discovery and enumeration/);
+  assert.match(result.entries[0].content, /mcp_search/);
+  assert.match(result.entries[0].content, /comprehensive network discovery/);
+});
+
+test('workflow continuation stops when all stages are complete/unavailable or guard cap is reached', () => {
+  const event = { outcome: 'completed', entries: [], context: {} };
+  assert.equal(workflowContinuationBoundaryResult(event, [
+    { stage: 'wireless', status: 'unavailable' },
+    { stage: 'map', status: 'completed' },
+  ], 0), undefined);
+  assert.equal(workflowContinuationBoundaryResult(event, [
+    { stage: 'map', tool: 'security_generate_graphical_network_map', query: 'graphical network map', status: 'outstanding', discovered: true },
+  ], WORKFLOW_CONTINUATION_LIMIT), undefined);
 });

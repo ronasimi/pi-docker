@@ -1,8 +1,16 @@
+# 2026-10-02 — MCP workflow ledger v12
+
+- Recover small-model `mcp_search` batches by executing only the first `queries[]` entry and returning the remaining entries as deferred, never as a batched discovery request.
+- Prefer the high-level Security MCP reconnaissance tools for comprehensive host-state/discovery/topology/wireless/map queries, while keeping lower-level primitives available for narrower tasks.
+- Add runtime network-workflow completion tracking and `agent_before_settle` continuation so an explicit multi-stage assessment cannot silently finalize with requested stages still outstanding.
+- Mark dedicated exhausted searches as concrete capability limitations so workflows can finish honestly when a capability is genuinely unavailable.
+- Add per-tool workflow guidance after successful calls and sync the current Security discovery aliases into the Pi MCP config.
+
 # 2026-10-02 — Small-model mcp_search query alias compatibility
 
 - Keep singular `query` as the canonical `mcp_search` argument while accepting the observed Gemma 4 E2B serialization variant `queries: ["capability"]` at the native Pi tool-schema boundary.
-- Normalize only a single non-empty alias item into `query` before bounded discovery. Empty arrays, multi-item arrays, non-string values, and conflicting `query`/`queries[0]` values fail closed.
-- Do not add batched discovery: the existing one-capability query semantics, search budgets, server routing, pagination, grant handling, and schema-fit requirements remain unchanged.
+- Normalize the compatibility alias into one bounded capability search before execution. V12 extends this recovery to multi-item `queries[]` by executing only the first entry and deferring the rest rather than batching them.
+- Preserve one-capability query semantics, search budgets, server routing, pagination, grant handling, and schema-fit requirements.
 - Add unit regressions for alias normalization and end-to-end bounded-gate execution of the malformed call shape observed in the attached session.
 
 # 2026-10-02 — Upstream Pi 1.0 runtime and direct network-map handoff

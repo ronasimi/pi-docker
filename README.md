@@ -34,6 +34,8 @@ For comprehensive network reconnaissance, the gate stores the exact structured r
 
 If the user explicitly requests a wireless assessment, host-state Wi-Fi metadata does not satisfy that step: the dedicated `security_analyze_wireless_environment` capability must complete before map generation.
 
+For small-model robustness, `mcp_search` accepts a bounded `queries[]` compatibility form. Only the first entry is executed; extra entries are returned as deferred and must be searched separately. The runtime also maintains a network-workflow completion ledger and can request another provider turn at `agent_before_settle` when an explicitly requested host-state, comprehensive discovery, topology, wireless, or map stage remains outstanding.
+
 ## MCP workflow
 
 For capabilities outside exposed native tools:

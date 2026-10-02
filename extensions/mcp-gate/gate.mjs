@@ -1,5 +1,5 @@
 export const ALLOWED_TOOLS = ['read', 'write', 'edit', 'bash', 'mcp_search', 'mcp_call'];
-export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200, serverCandidates: 96, globalCandidates: 100, discoveryPages: 4 });
+export const LIMITS = Object.freeze({ results: 3, discoveryBytes: 16384, grants: 64, searches: 6, calls: 24, queryChars: 200, compatibilityQueries: 6, serverCandidates: 96, globalCandidates: 100, discoveryPages: 4 });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
 const textOf = result => (result?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 const failed = result => Boolean(result?.isError || result?.details?.error);
@@ -41,15 +41,21 @@ export function normalizeSearchParams(params = {}) {
   }
 
   let canonical = typeof params.query === 'string' ? params.query.trim() : '';
-  let alias = '';
+  let aliases = [];
   if (hasQueriesField) {
-    if (!Array.isArray(params.queries) || params.queries.length !== 1 || typeof params.queries[0] !== 'string') {
-      failure('mcp_search queries compatibility alias must contain exactly one string. Use {query: "capability"}; batching multiple capability searches is not supported.');
+    if (!Array.isArray(params.queries) || params.queries.length < 1 || params.queries.length > LIMITS.compatibilityQueries) {
+      failure(`mcp_search queries compatibility alias must contain 1–${LIMITS.compatibilityQueries} strings. Only the first entry is executed; remaining entries must be searched separately.`);
     }
-    alias = params.queries[0].trim();
-    if (!alias) failure('mcp_search queries compatibility alias must contain one non-empty string.');
+    if (params.queries.some(value => typeof value !== 'string')) {
+      failure('mcp_search queries compatibility alias must contain strings only.');
+    }
+    aliases = params.queries.map(value => value.trim());
+    if (aliases.some(value => !value || value.length > LIMITS.queryChars)) {
+      failure('mcp_search queries compatibility alias entries must each contain 1–200 characters.');
+    }
   }
 
+  const alias = aliases[0] ?? '';
   if (canonical && alias && canonical !== alias) {
     failure('mcp_search received conflicting query and queries[0] values. Use one canonical query string.');
   }
@@ -108,13 +114,26 @@ function overlapCount(a, b) {
   for (const token of a) if (b.has(token)) n++;
   return n;
 }
-function scoreDiscoveryMatch(config, query, match, index) {
+function preferredSecurityReconTool(query, contextPrompt = '') {
+  const q = normalized(query);
+  const context = normalized(contextPrompt);
+  const comprehensiveContext = /\b(comprehensive|network reconnaissance|network assessment|network discovery|network enumeration|graphical network map|wireless assessment|network topology)\b/.test(context);
+  if (/\b(graphical network map|network map|topology diagram|svg network map|visualize network)\b/.test(q)) return 'generate_graphical_network_map';
+  if (/\b(wireless|wifi|wi fi|ssid|bssid|channel overlap|congestion|nearby access points|security modes|signal strength)\b/.test(q)) return 'analyze_wireless_environment';
+  if (/\b(network topology|topology analysis|vlan|lldp|cdp|client isolation|mdns reflector|routing relationship|switches|access points)\b/.test(q)) return 'analyze_network_topology';
+  if (/\b(host network state|host interface|active network interface|default gateway|internet connectivity|ethernet or wifi|network state)\b/.test(q)) return 'get_host_interface_info';
+  if (/\b(comprehensive network discovery|network discovery|network enumeration|network inventory|lan reconnaissance|discover and scan hosts|os fingerprint|service fingerprint|service enumeration|scan ports and services|open ports|smb shares|nfs shares|media servers)\b/.test(q)) {
+    if (comprehensiveContext || /\b(comprehensive|enumeration|inventory|reconnaissance|fingerprint|services|shares|media)\b/.test(q)) return 'perform_network_discovery';
+  }
+  return null;
+}
+function scoreDiscoveryMatch(config, query, match, index, contextPrompt = '') {
   const local = localToolName(match);
   const q = normalized(query);
   const qTokens = tokenSet(query);
   const toolTokens = tokenSet(local);
   const keywords = config.mcpServers?.[match.server]?.searchKeywords ?? {};
-  const aliases = Array.isArray(keywords[local]) ? keywords[local] : [];
+  const aliases = [...new Set([...(Array.isArray(keywords[local]) ? keywords[local] : []), ...(Array.isArray(keywords[match.tool]) ? keywords[match.tool] : [])])];
   let score = Math.max(0, 1 - index / 1000);
   score += overlapCount(qTokens, toolTokens) * 7;
   let bestAlias = 0;
@@ -136,6 +155,11 @@ function scoreDiscoveryMatch(config, query, match, index) {
     if (qTokens.size) aliasScore += (entityOnly ? 5 : 25) * (overlap / qTokens.size);
     bestAlias = Math.max(bestAlias, aliasScore);
   }
+  const preferred = preferredSecurityReconTool(query, contextPrompt);
+  if (match.server === 'security' && preferred) {
+    if (local === preferred) score += 400;
+    else if (preferred === 'perform_network_discovery' && local === 'network_discover') score -= 40;
+  }
   return score + bestAlias;
 }
 
@@ -144,7 +168,7 @@ function scoreDiscoveryMatch(config, query, match, index) {
 // exposing at most three complete schemas to the model. This prevents broad
 // server aliases (for example "router" on the system server) from making an
 // unrelated Docker/document tool outrank openwrt_clients.
-export function rankDiscoveryMatches(config, query, matches = []) {
+export function rankDiscoveryMatches(config, query, matches = [], contextPrompt = '') {
   const unique = [];
   const seen = new Set();
   for (const match of matches) {
@@ -167,7 +191,7 @@ export function rankDiscoveryMatches(config, query, matches = []) {
     .map((match, index) => {
       const family = preferredFamily(match.server, query);
       const restrict = family && familyAvailability.get(`${match.server}\0${family}`);
-      return { match, index, keep: !restrict || inFamily(match.server, match.tool, family), score: scoreDiscoveryMatch(config, query, match, index) };
+      return { match, index, keep: !restrict || inFamily(match.server, match.tool, family), score: scoreDiscoveryMatch(config, query, match, index, contextPrompt) };
     })
     .filter(row => row.keep)
     .sort((a, b) => b.score - a.score || a.index - b.index)
@@ -264,16 +288,55 @@ const NETWORK_RECON_RESULT_KEYS = Object.freeze({
   security_analyze_wireless_environment: 'analyze_wireless_environment',
 });
 const NETWORK_MAP_TOOL = 'security_generate_graphical_network_map';
+const NETWORK_WORKFLOW_STAGES = Object.freeze([
+  {
+    stage: 'host network state',
+    tool: 'security_get_host_interface_info',
+    query: 'host network interface state',
+    pattern: /\b(host network state|physical network interfaces?|active connection|active network interface|ipv4|ipv6|default gateway|link speed|internet connectivity)\b/,
+    queryPattern: /\b(host network state|host interface|network interface state|active network interface|default gateway|internet connectivity|ethernet or wifi)\b/,
+  },
+  {
+    stage: 'network discovery and enumeration',
+    tool: 'security_perform_network_discovery',
+    query: 'comprehensive network discovery',
+    pattern: /\b(network discovery|network enumeration|host enumeration|live hosts?|open ports?|service detection|service fingerprint|os fingerprint|smb|nfs|media services?|plex|jellyfin|emby)\b/,
+    queryPattern: /\b(comprehensive network discovery|network discovery|network enumeration|host enumeration|network inventory|lan reconnaissance|port scan and service fingerprint|service fingerprint|service enumeration|open ports|scan ports and services|smb shares|nfs shares|media servers)\b/,
+  },
+  {
+    stage: 'network topology',
+    tool: 'security_analyze_network_topology',
+    query: 'network topology analysis',
+    pattern: /\b(network topology|topology|vlans?|lldp|cdp|client isolation|routing relationships?|access points?|switches?)\b/,
+    queryPattern: /\b(network topology|topology analysis|vlans?|lldp|cdp|client isolation|routing relationships?|gateway topology|network structure)\b/,
+  },
+  {
+    stage: 'wireless environment assessment',
+    tool: 'security_analyze_wireless_environment',
+    query: 'passive wireless environment assessment',
+    pattern: /\b(wireless environment|wireless assessment|wi fi|wifi|ssid|bssid|signal strength|channels?|channel overlap|congestion|nearby wireless|security modes?)\b/,
+    queryPattern: /\b(wireless environment|wireless assessment|wireless analysis|wifi analysis|wi fi|wifi|ssid|bssid|signal strength|channel overlap|congestion|nearby access points|security modes?)\b/,
+  },
+  {
+    stage: 'graphical network map',
+    tool: NETWORK_MAP_TOOL,
+    query: 'graphical network map',
+    pattern: /\b(graphical network map|network map|network topology diagram|svg|interactive html|visualize network)\b/,
+    queryPattern: /\b(graphical network map|network map|network topology diagram|svg network map|visualize network|network diagram)\b/,
+  },
+]);
 
 export function requestedNetworkWorkflowStages(prompt = '') {
   const text = normalized(prompt);
-  const stages = [];
-  const add = (stage, tool, pattern) => { if (pattern.test(text)) stages.push({ stage, tool }); };
-  add('host network state', 'security_get_host_interface_info', /\b(host network state|physical network interfaces?|active connection|ipv4|ipv6|default gateway|link speed|internet connectivity)\b/);
-  add('network discovery', 'security_perform_network_discovery', /\b(network discovery|network enumeration|host enumeration|live hosts?|open ports?|service detection|smb|nfs|media services?)\b/);
-  add('network topology', 'security_analyze_network_topology', /\b(network topology|topology|vlans?|lldp|cdp|client isolation|routing relationships?|access points?|switches?)\b/);
-  add('wireless environment', 'security_analyze_wireless_environment', /\b(wireless environment|wireless assessment|wi fi|wifi|ssid|bssid|signal strength|channels?|channel overlap|security modes?)\b/);
-  return stages;
+  return NETWORK_WORKFLOW_STAGES.filter(({ pattern }) => pattern.test(text)).map(({ pattern: _pattern, queryPattern: _queryPattern, ...stage }) => ({ ...stage }));
+}
+
+export function networkStageForCapabilityQuery(query = '') {
+  const text = normalized(query);
+  const stage = NETWORK_WORKFLOW_STAGES.find(({ queryPattern }) => queryPattern.test(text));
+  if (!stage) return null;
+  const { pattern: _pattern, queryPattern: _queryPattern, ...publicStage } = stage;
+  return { ...publicStage };
 }
 
 function parseStructuredResultObject(result) {
@@ -348,16 +411,41 @@ export class BoundedGate {
     this.currentPrompt = String(prompt ?? '');
     this.successfulCallsThisTurn = new Map();
     this.successfulResultsThisTurn = new Map();
+    this.exhaustedNetworkStagesThisTurn = new Map();
   }
   latestSuccessfulResult(tool) {
     const rows = this.successfulResultsThisTurn.get(tool) ?? [];
     return rows.at(-1)?.result ?? null;
   }
-  outstandingNetworkStages() {
-    return requestedNetworkWorkflowStages(this.currentPrompt).filter(({ tool }) => !this.latestSuccessfulResult(tool));
+  networkWorkflowStatus({ includeMap = true } = {}) {
+    return requestedNetworkWorkflowStages(this.currentPrompt)
+      .filter(({ tool }) => includeMap || tool !== NETWORK_MAP_TOOL)
+      .map(stage => {
+        const completed = Boolean(this.latestSuccessfulResult(stage.tool));
+        const unavailable = !completed ? this.exhaustedNetworkStagesThisTurn.get(stage.tool) : undefined;
+        return {
+          ...stage,
+          status: completed ? 'completed' : unavailable ? 'unavailable' : 'outstanding',
+          discovered: this.grants.has(stage.tool),
+          ...(unavailable ? { limitation: unavailable } : {}),
+        };
+      });
+  }
+  outstandingNetworkStages(options = {}) {
+    return this.networkWorkflowStatus(options).filter(({ status }) => status === 'outstanding');
+  }
+  nextNetworkWorkflowGuidance() {
+    const next = this.outstandingNetworkStages()[0];
+    if (!next) return null;
+    return {
+      ...next,
+      instruction: next.discovered
+        ? `Call ${next.tool} with arguments matching its discovered schema.`
+        : `Run mcp_search with {query: "${next.query}", server: "security"}, inspect the schema, then call the exact returned tool.`,
+    };
   }
   prepareNetworkMapArgs(args = {}) {
-    const missing = this.outstandingNetworkStages();
+    const missing = this.outstandingNetworkStages({ includeMap: false });
     if (missing.length) {
       const labels = missing.map(x => x.stage).join(', ');
       const next = missing[0];
@@ -443,7 +531,7 @@ export class BoundedGate {
     const found = await this.invoke({ search: query, server, limit: candidateLimit, offset: currentOffset, includeSchemas: false, searchMode: 'lexical' }, signal);
     if (failed(found)) failure(`MCP discovery failed: ${textOf(found).slice(0, 1500)}`);
     const rawMatches = Array.isArray(found.details?.matches) ? found.details.matches : [];
-    const ranked = rankDiscoveryMatches(this.config, query, rawMatches);
+    const ranked = rankDiscoveryMatches(this.config, query, rawMatches, this.currentPrompt);
     for (const match of ranked) {
       const key = `${match.server}\0${match.tool}`;
       if (state.seen.has(key)) continue;
@@ -459,8 +547,10 @@ export class BoundedGate {
   }
   async search(params, signal) {
     if (signal?.aborted) throw signal.reason;
+    const compatibilityQueries = Array.isArray(params?.queries) ? params.queries.map(value => typeof value === 'string' ? value.trim() : value) : [];
     params = normalizeSearchParams(params);
     const query = params.query;
+    const deferredQueries = compatibilityQueries.slice(1);
     if (++this.searches > LIMITS.searches) failure('MCP search budget reached for this user turn (6). Use a discovered tool or report the concrete blocker.');
     const limit = Math.min(LIMITS.results, Math.max(1, Math.floor(Number(params.limit) || LIMITS.results)));
     const offset = Math.min(1000, Math.max(0, Math.floor(Number(params.offset) || 0)));
@@ -498,7 +588,10 @@ export class BoundedGate {
     const output = { tools: [], errors, omitted: [], hasMore: false, nextOffset: null,
       resultScope: 'query_matches_not_server_catalog', catalogComplete: false,
       ...(inferredServer ? { routedServer: inferredServer } : {}),
-      instruction: 'These are ranked matches for this capability query only, not a server catalog. Validate schema fit before calling. If none fits and hasMore is true, continue the same query/server with offset=nextOffset; otherwise refine this capability once. For a different outstanding capability in a multi-step request, run a separate mcp_search before claiming it is unavailable. Call mcp_call only with an exact returned tool and matching args.' };
+      ...(deferredQueries.length ? { compatibilityRecovery: { executedQuery: query, deferredQueries, batched: false } } : {}),
+      instruction: deferredQueries.length
+        ? `Compatibility recovery executed only the first queries[] entry: "${query}". The remaining entries were NOT searched: ${deferredQueries.map(value => `"${value}"`).join(', ')}. Search each remaining capability separately with a new mcp_search call. These results are only for the executed query; validate schema fit and call only an exact returned tool.`
+        : 'These are ranked matches for this capability query only, not a server catalog. Validate schema fit before calling. If none fits and hasMore is true, continue the same query/server with offset=nextOffset; otherwise refine this capability once. For a different outstanding capability in a multi-step request, run a separate mcp_search before claiming it is unavailable. Call mcp_call only with an exact returned tool and matching args.' };
     let cursor = offset;
     while (output.tools.length < limit) {
       if (cursor >= state.matches.length) {
@@ -537,6 +630,21 @@ export class BoundedGate {
     while (bytes(output) > LIMITS.discoveryBytes && output.errors.length) output.errors.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.omitted.length) output.omitted.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.tools.length) output.tools.pop();
+
+    const networkStage = effectiveServer === 'security' ? networkStageForCapabilityQuery(query) : null;
+    if (networkStage) {
+      const exactAvailable = output.tools.some(item => item.tool === networkStage.tool) || this.grants.has(networkStage.tool);
+      if (exactAvailable) this.exhaustedNetworkStagesThisTurn.delete(networkStage.tool);
+      else if (!output.hasMore) {
+        this.exhaustedNetworkStagesThisTurn.set(networkStage.tool, {
+          query,
+          reason: output.errors.length
+            ? `Security MCP discovery could not complete: ${output.errors.map(item => `${item.server}: ${item.error}`).join('; ')}`
+            : `No callable ${networkStage.stage} capability was found after exhausting the dedicated search query "${query}".`,
+        });
+      }
+    }
+
     this.recentSearchTools = output.tools.map(item => ({ tool: item.tool, server: item.server, inputSchema: item.inputSchema, description: item.description }));
     for (const item of output.tools) this.remember(item.tool, item.server, item.inputSchema, { description: item.description, query });
     return data(output);
@@ -627,9 +735,18 @@ export class BoundedGate {
       rows.push({ result: structuredClone(structuredResult), at: Date.now() });
       this.successfulResultsThisTurn.set(tool, rows.slice(-4));
     }
+    this.exhaustedNetworkStagesThisTurn.delete(tool);
     // The adapter's output guard preserves large results in a local spill file.
     // Do not duplicate its bounded raw MCP details into the model context.
-    return { content: dedupeContent(result.content), details: { server, tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };
+    const content = dedupeContent(result.content);
+    const nextStage = this.nextNetworkWorkflowGuidance();
+    if (nextStage) {
+      content.push({
+        type: 'text',
+        text: `Workflow progress: ${nextStage.stage} is still outstanding. ${nextStage.instruction} A lower-level related tool does not complete this requested stage.`,
+      });
+    }
+    return { content, details: { server, tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };
   }
 }
 

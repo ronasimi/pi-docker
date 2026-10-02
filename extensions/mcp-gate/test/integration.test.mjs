@@ -81,7 +81,7 @@ test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reloa
     assert.equal(searchTool.function.parameters.properties.query.type, 'string');
     assert.equal(searchTool.function.parameters.properties.queries.type, 'array');
     assert.equal(searchTool.function.parameters.properties.queries.minItems, 1);
-    assert.equal(searchTool.function.parameters.properties.queries.maxItems, 1);
+    assert.equal(searchTool.function.parameters.properties.queries.maxItems, 6);
     const callTool = requests[0].tools.find(t => t.function.name === 'mcp_call');
     assert.ok(callTool, 'mcp_call schema is exposed');
     assert.match(callTool.function.description, /successful call completes only that capability/i);

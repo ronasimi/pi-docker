@@ -3,7 +3,7 @@ import { Type } from 'typebox';
 import { createMcpAdapter } from 'pi-mcp-adapter';
 import { ALLOWED_TOOLS, BoundedGate, gateConfig } from './gate.mjs';
 import { installWhiteRabbitReasoning } from './reasoning.mjs';
-import { thinkingOnlyBoundaryResult } from './runtime-guards.mjs';
+import { thinkingOnlyBoundaryResult, workflowContinuationBoundaryResult } from './runtime-guards.mjs';
 
 export default function boundedMcp(pi: any) {
   installWhiteRabbitReasoning(pi);
@@ -27,26 +27,33 @@ export default function boundedMcp(pi: any) {
   });
   const enforce = () => pi.setActiveTools(pi.getActiveTools().filter((name: string) => ALLOWED_TOOLS.includes(name)));
   let thinkingContinuationUsed = false;
+  let workflowContinuationCount = 0;
   const restore = (_event: any, ctx: any) => {
     enforce();
     thinkingContinuationUsed = false;
+    workflowContinuationCount = 0;
     gate.restore(ctx.sessionManager.getBranch());
   };
   pi.on('session_start', restore);
   pi.on('session_tree', restore);
-  pi.on('before_agent_start', (event: any) => { enforce(); thinkingContinuationUsed = false; gate.beginTurn(event.prompt); });
+  pi.on('before_agent_start', (event: any) => { enforce(); thinkingContinuationUsed = false; workflowContinuationCount = 0; gate.beginTurn(event.prompt); });
   pi.on('turn_start', enforce);
   pi.on('tool_call', (event: any) => {
     if (!ALLOWED_TOOLS.includes(event.toolName)) return { block: true, reason: 'Optional native tools are disabled. Use mcp_search to discover the capability, then mcp_call.' };
   });
   pi.on('agent_before_settle', (event: any) => {
+    const workflowResult = workflowContinuationBoundaryResult(event, gate.networkWorkflowStatus(), workflowContinuationCount);
+    if (workflowResult) {
+      workflowContinuationCount++;
+      return workflowResult;
+    }
     const result = thinkingOnlyBoundaryResult(event, thinkingContinuationUsed);
     if (result) thinkingContinuationUsed = true;
     return result;
   });
   pi.registerTool({
     name: 'mcp_search', label: 'MCP search',
-    description: 'Discover bounded MCP tools for one capability query. Security work should use server=security; the gate also strongly infers security routing when omitted. Returns up to 3 ranked schemas plus hasMore/nextOffset. Results are query matches, not a server catalog: for a different outstanding capability, search again before claiming it is unavailable. Validate schema fit and call only an exact returned tool.',
+    description: 'Discover bounded MCP tools for one capability query. Prefer the canonical query string. If a small model emits queries:[...], the gate executes only the first entry and reports the rest as deferred; it never batches capability searches. Security work should use server=security. Returns up to 3 ranked schemas plus hasMore/nextOffset. Results are query matches, not a server catalog: search every different outstanding capability separately before claiming it is unavailable. Validate schema fit and call only an exact returned tool.',
     executionMode: 'sequential',
     parameters: Type.Object({
       // `query` is canonical. `queries` is a narrow compatibility alias for
@@ -56,7 +63,7 @@ export default function boundedMcp(pi: any) {
       query: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Canonical single capability query. Prefer this field.' })),
       queries: Type.Optional(Type.Array(
         Type.String({ minLength: 1, maxLength: 200 }),
-        { minItems: 1, maxItems: 1, description: 'Compatibility alias for query. Exactly one string; do not use for batching.' },
+        { minItems: 1, maxItems: 6, description: 'Compatibility alias for small-model serialization. The gate executes only the first string; remaining entries are returned as deferred and must be searched separately. Do not use for batching.' },
       )),
       server: Type.Optional(Type.String()),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 3 })),

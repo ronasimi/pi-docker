@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, inferServerForQuery, LIMITS, normalizeSearchParams, rankDiscoveryMatches } from '../gate.mjs';
+import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, inferServerForQuery, LIMITS, networkStageForCapabilityQuery, normalizeSearchParams, rankDiscoveryMatches } from '../gate.mjs';
 
 function fixture(options = {}) {
   const calls = [];
@@ -17,31 +17,41 @@ function fixture(options = {}) {
 }
 
 
-test('normalizes the single-item mcp_search queries alias without enabling batched discovery', () => {
+test('normalizes mcp_search queries compatibility input without enabling batched discovery', () => {
   assert.deepEqual(
     normalizeSearchParams({ queries: ['host network interface state'], server: 'security', limit: 1 }),
     { query: 'host network interface state', server: 'security', limit: 1 },
   );
   assert.deepEqual(
-    normalizeSearchParams({ query: 'network status', queries: ['network status'], server: 'security' }),
+    normalizeSearchParams({ queries: ['host network interface state', 'network discovery'], server: 'security' }),
+    { query: 'host network interface state', server: 'security' },
+  );
+  assert.deepEqual(
+    normalizeSearchParams({ query: 'network status', queries: ['network status', 'wireless assessment'], server: 'security' }),
     { query: 'network status', server: 'security' },
   );
-  assert.throws(() => normalizeSearchParams({ queries: [] }), /exactly one string/i);
-  assert.throws(() => normalizeSearchParams({ queries: ['one', 'two'] }), /exactly one string/i);
+  assert.throws(() => normalizeSearchParams({ queries: [] }), /1–6 strings/i);
+  assert.throws(() => normalizeSearchParams({ queries: ['one', 'two', 'three', 'four', 'five', 'six', 'seven'] }), /1–6 strings/i);
+  assert.throws(() => normalizeSearchParams({ queries: ['one', 2] }), /strings only/i);
   assert.throws(
-    () => normalizeSearchParams({ query: 'network status', queries: ['host interfaces'] }),
+    () => normalizeSearchParams({ query: 'network status', queries: ['host interfaces', 'wireless'] }),
     /conflicting query and queries\[0\]/i,
   );
   assert.throws(() => normalizeSearchParams({}), /requires a specific capability query/i);
 });
 
-test('mcp_search executes a single-item queries alias as the canonical query', async () => {
+test('mcp_search executes only the first queries alias entry and reports deferred capabilities', async () => {
   const { gate, calls } = fixture();
-  const result = JSON.parse((await gate.search({ queries: ['navigate'], server: 'playwright', limit: 1 })).content[0].text);
+  const result = JSON.parse((await gate.search({ queries: ['navigate', 'screenshot', 'click'], server: 'playwright', limit: 1 })).content[0].text);
   assert.equal(result.tools.length, 1);
-  const search = calls.find(call => Object.hasOwn(call, 'search'));
-  assert.equal(search.search, 'navigate');
-  assert.equal(search.server, 'playwright');
+  const searches = calls.filter(call => Object.hasOwn(call, 'search'));
+  assert.equal(searches.length, 1, 'compatibility recovery must never fan out into batched discovery');
+  assert.equal(searches[0].search, 'navigate');
+  assert.equal(searches[0].server, 'playwright');
+  assert.deepEqual(result.compatibilityRecovery, {
+    executedQuery: 'navigate', deferredQueries: ['screenshot', 'click'], batched: false,
+  });
+  assert.match(result.instruction, /remaining entries were NOT searched/i);
 });
 
 test('family-aware discovery prevents broad server terms from outranking the requested capability', () => {
@@ -99,6 +109,28 @@ test('family-aware discovery prevents broad server terms from outranking the req
   );
 });
 
+
+test('comprehensive network workflow reranking prefers high-level recon tools over lower-level primitives', () => {
+  const config = { mcpServers: { security: { searchKeywords: {
+    network_discover: ['network discovery', 'discover hosts'],
+    perform_network_discovery: ['comprehensive network discovery', 'scan ports and services', 'network inventory'],
+    analyze_network_topology: ['network topology'],
+    analyze_wireless_environment: ['wireless analysis'],
+    generate_graphical_network_map: ['graphical network map'],
+  } } } };
+  const context = 'Perform comprehensive network reconnaissance, network discovery and enumeration, topology, wireless assessment, and a graphical network map.';
+  const matches = [
+    { server: 'security', tool: 'security_network_discover' },
+    { server: 'security', tool: 'security_perform_network_discovery' },
+    { server: 'security', tool: 'security_port_scan' },
+  ];
+  assert.equal(
+    rankDiscoveryMatches(config, 'port scan and service fingerprinting', matches, context)[0].tool,
+    'security_perform_network_discovery',
+  );
+  assert.equal(networkStageForCapabilityQuery('passive wireless environment assessment').tool, 'security_analyze_wireless_environment');
+  assert.equal(networkStageForCapabilityQuery('graphical network map').tool, 'security_generate_graphical_network_map');
+});
 
 test('strong capability queries infer the narrow MCP server when the model omits a filter', () => {
   const config = { mcpServers: { security: {}, system: {}, google: {}, playwright: {}, searxng: {}, memory: {} } };
@@ -415,6 +447,47 @@ test('gateway operations serialize and recover after an execution failure', asyn
   await assert.rejects(first, /failed/);
   await second;
   assert.deepEqual(order, [1, 2, 3]);
+});
+
+test('network workflow ledger does not count lower-level host discovery as comprehensive enumeration', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) {
+      const tool = params.search.includes('host network') ? 'security_get_host_interface_info' : 'security_network_discover';
+      return { details: { matches: [{ server: 'security', tool }], hasMore: false, nextOffset: null } };
+    }
+    if (params.describe) return { details: { tool: { description: params.describe, inputSchema: { type: 'object', properties: {}, required: [], additionalProperties: true } } } };
+    return { content: [{ type: 'text', text: JSON.stringify({ complete: true }) }], details: {} };
+  });
+  gate.beginTurn('Perform HOST NETWORK STATE, NETWORK DISCOVERY AND ENUMERATION, NETWORK TOPOLOGY, WIRELESS ENVIRONMENT and a GRAPHICAL NETWORK MAP.');
+  await gate.search({ query: 'host network interface state', server: 'security', limit: 1 });
+  await gate.call({ tool: 'security_get_host_interface_info', args: {} });
+  await gate.search({ query: 'discover live hosts', server: 'security', limit: 1 });
+  await gate.call({ tool: 'security_network_discover', args: {} });
+  const status = gate.networkWorkflowStatus();
+  assert.equal(status.find(x => x.tool === 'security_get_host_interface_info').status, 'completed');
+  assert.equal(status.find(x => x.tool === 'security_perform_network_discovery').status, 'outstanding');
+  assert.match(gate.nextNetworkWorkflowGuidance().instruction, /comprehensive network discovery/i);
+});
+
+test('dedicated exhausted network capability search is recorded as an explicit limitation', async () => {
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: [], hasMore: false, nextOffset: null } };
+    return { details: {} };
+  });
+  gate.beginTurn('Perform a WIRELESS ENVIRONMENT assessment.');
+  const result = JSON.parse((await gate.search({ query: 'passive wireless environment assessment', server: 'security' })).content[0].text);
+  assert.equal(result.hasMore, false);
+  const status = gate.networkWorkflowStatus();
+  assert.equal(status.length, 1);
+  assert.equal(status[0].status, 'unavailable');
+  assert.match(status[0].limitation.reason, /No callable wireless environment assessment capability/i);
+  assert.equal(gate.outstandingNetworkStages().length, 0);
 });
 
 test('network map waits for explicitly requested recon stages and injects exact prior results as direct data', async () => {

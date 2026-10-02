@@ -70,3 +70,30 @@ export function thinkingOnlyBoundaryResult(event, alreadyUsed = false) {
     continue: true,
   };
 }
+
+export const WORKFLOW_CONTINUATION_LIMIT = 5;
+
+export function workflowContinuationBoundaryResult(event, workflowStatus = [], continuationCount = 0) {
+  if (event?.outcome !== 'completed' || continuationCount >= WORKFLOW_CONTINUATION_LIMIT) return undefined;
+  const outstanding = (workflowStatus ?? []).filter(item => item?.status === 'outstanding');
+  if (!outstanding.length) return undefined;
+  const next = outstanding[0];
+  const remaining = outstanding.map(item => item.stage).join(', ');
+  const action = next.discovered
+    ? `Call the already-discovered ${next.tool} tool with arguments matching its schema.`
+    : `Run mcp_search with {query: "${next.query}", server: "security"}, inspect the returned schema, then call the exact matching tool.`;
+  const content = `The requested multi-step network workflow is not complete. Outstanding capabilities: ${remaining}. Next required capability: ${next.stage}. ${action} Do not finalize or claim the capability is unavailable unless its dedicated search has been exhausted. Do not substitute a lower-level related tool for this stage.`;
+  return {
+    entries: [
+      ...(Array.isArray(event.entries) ? event.entries : []),
+      {
+        type: 'custom_message',
+        customType: 'mcp-workflow-continuation',
+        content,
+        display: false,
+        details: { source: 'mcp-gate', reason: 'incomplete-network-workflow', stage: next.stage, tool: next.tool },
+      },
+    ],
+    continue: true,
+  };
+}
