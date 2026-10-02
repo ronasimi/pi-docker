@@ -186,6 +186,56 @@ export function schemaAcceptsArgs(schema, args) {
   return schemaValueMatches(schema ?? { type: 'object' }, args);
 }
 
+function normalizeForStableJson(value, schema = undefined) {
+  if (Array.isArray(value)) return value.map(item => normalizeForStableJson(item, schema?.items));
+  if (!value || typeof value !== 'object') return value;
+  const properties = schema?.properties && typeof schema.properties === 'object' ? schema.properties : {};
+  const out = {};
+  for (const key of Object.keys(value).sort()) {
+    const childSchema = properties[key];
+    const normalizedValue = normalizeForStableJson(value[key], childSchema);
+    if (childSchema && Object.hasOwn(childSchema, 'default') && Object.is(normalizedValue, childSchema.default)) continue;
+    out[key] = normalizedValue;
+  }
+  return out;
+}
+
+export function canonicalArgs(args, schema = undefined) {
+  return JSON.stringify(normalizeForStableJson(args ?? {}, schema));
+}
+
+const MUTATING_TOOL_WORDS = /(?:^|_)(?:create|add|send|write|edit|update|patch|set|change|delete|remove|move|rename|upload|install|uninstall|start|stop|restart|enable|disable|reboot|shutdown|execute|shell|command|apply|deploy)(?:_|$)/i;
+const STATUS_TOOL_WORDS = /(?:^|_)(?:status|health|poll|wait|watch|monitor|progress|tail|logs?|output)(?:_|$)/i;
+
+export function isLikelyReadOnlyTool(tool, description = '') {
+  if (STATUS_TOOL_WORDS.test(String(tool ?? ''))) return true;
+  if (MUTATING_TOOL_WORDS.test(String(tool ?? ''))) return false;
+  const text = normalized(description);
+  if (/\b(create|send|write|edit|update|delete|remove|restart|reboot|install|upload|modify|change state|state changing)\b/.test(text)) return false;
+  return true;
+}
+
+export function promptExplicitlyRequestsSuccessfulRepeat(prompt = '') {
+  const text = normalized(prompt);
+  return /\b(rerun|recheck|repeat|refresh)\b/.test(text)
+    || /\b(run|check|scan|call|do|perform|read|fetch|open)\b.{0,24}\bagain\b/.test(text)
+    || /\b(twice|two times|second pass)\b/.test(text);
+}
+
+export function repeatArgsEquivalent(schema, previousArgs, nextArgs) {
+  const prev = previousArgs ?? {};
+  const next = nextArgs ?? {};
+  if (canonicalArgs(prev, schema) === canonicalArgs(next, schema)) return true;
+  const required = Array.isArray(schema?.required) ? schema.required : [];
+  // A common small-model no-progress pattern is a successful explicit call
+  // followed by the same all-optional tool with `{}`. The second invocation
+  // simply re-applies server defaults and usually repeats the same expensive
+  // operation. Treat that as equivalent within one user turn. Going from an
+  // empty/default call to new explicit arguments remains allowed.
+  if (required.length === 0 && Object.keys(next).length === 0 && Object.keys(prev).length > 0) return true;
+  return false;
+}
+
 
 // Keep the real adapter's transports, argument validation, approval handling,
 // reconnect logic, and output guard. Only its model-facing surface is replaced.
@@ -214,27 +264,32 @@ export class BoundedGate {
   reset() {
     this.grants = new Map();
     this.grantSchemas = new Map();
+    this.grantMeta = new Map();
     this.recentSearchTools = [];
     this.connected = new Set();
     this.discoveryCache = new Map();
     this.beginTurn();
   }
-  beginTurn() {
+  beginTurn(prompt = '') {
     this.searches = 0;
     this.calls = 0;
+    this.currentPrompt = String(prompt ?? '');
+    this.successfulCallsThisTurn = new Map();
   }
   enabled(server) {
     return Object.hasOwn(this.config.mcpServers ?? {}, server) && this.config.mcpServers[server].disabled !== true;
   }
-  remember(tool, server, schema = undefined) {
+  remember(tool, server, schema = undefined, meta = undefined) {
     if (typeof tool !== 'string' || !tool || tool.length > 256 || typeof server !== 'string' || !this.enabled(server)) return;
     this.grants.delete(tool);
     this.grants.set(tool, server);
     if (schema && typeof schema === 'object' && !Array.isArray(schema)) this.grantSchemas.set(tool, schema);
+    if (meta && typeof meta === 'object' && !Array.isArray(meta)) this.grantMeta.set(tool, { ...this.grantMeta.get(tool), ...meta });
     while (this.grants.size > LIMITS.grants) {
       const evicted = this.grants.keys().next().value;
       this.grants.delete(evicted);
       this.grantSchemas.delete(evicted);
+      this.grantMeta.delete(evicted);
     }
   }
   // Restore only successful discovery on the active branch, including sessions
@@ -251,7 +306,7 @@ export class BoundedGate {
             const value = JSON.parse(block.text);
             if (!Array.isArray(value?.tools)) continue;
             for (const item of value.tools.slice(0, LIMITS.results)) {
-              if (item?.inputSchema && typeof item.inputSchema === 'object' && !Array.isArray(item.inputSchema)) this.remember(item.tool, item.server, item.inputSchema);
+              if (item?.inputSchema && typeof item.inputSchema === 'object' && !Array.isArray(item.inputSchema)) this.remember(item.tool, item.server, item.inputSchema, { description: item.description });
             }
           } catch { /* Ignore non-discovery or malformed historical output. */ }
         }
@@ -377,8 +432,8 @@ export class BoundedGate {
     while (bytes(output) > LIMITS.discoveryBytes && output.errors.length) output.errors.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.omitted.length) output.omitted.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.tools.length) output.tools.pop();
-    this.recentSearchTools = output.tools.map(item => ({ tool: item.tool, server: item.server, inputSchema: item.inputSchema }));
-    for (const item of output.tools) this.remember(item.tool, item.server, item.inputSchema);
+    this.recentSearchTools = output.tools.map(item => ({ tool: item.tool, server: item.server, inputSchema: item.inputSchema, description: item.description }));
+    for (const item of output.tools) this.remember(item.tool, item.server, item.inputSchema, { description: item.description, query });
     return data(output);
   }
   async call(params, signal) {
@@ -424,6 +479,19 @@ export class BoundedGate {
     }
     const server = this.grants.get(tool);
     if (!server) failure(`Tool not discovered in this conversation (or evicted from the ${LIMITS.grants}-tool cache). Run mcp_search for the requested capability, then retry mcp_call with an exact returned name. Pass empty arguments separately as args: {}; never append {} to the tool name. This is a discovery requirement, not a target or service failure.`);
+
+    const schema = this.grantSchemas.get(tool);
+    const meta = this.grantMeta.get(tool) ?? {};
+    const successes = this.successfulCallsThisTurn.get(tool) ?? [];
+    const statusLike = STATUS_TOOL_WORDS.test(tool);
+    const explicitRepeat = promptExplicitlyRequestsSuccessfulRepeat(this.currentPrompt);
+    if (isLikelyReadOnlyTool(tool, meta.description) && !statusLike && !explicitRepeat) {
+      const duplicate = successes.find(previous => repeatArgsEquivalent(schema, previous.args, args));
+      if (duplicate) {
+        const capability = meta.query ? ` for capability query "${String(meta.query).slice(0, 120)}"` : '';
+        failure(`No-progress MCP call blocked: ${tool}${capability} already completed successfully in this user turn with equivalent arguments. Do not repeat the completed read-only operation. Continue with the next outstanding capability, or summarize the existing result. If the user explicitly requests a fresh rerun, start a new user turn or ask them to request it explicitly.`);
+      }
+    }
     if (!this.enabled(server)) {
       this.grants.delete(tool);
       failure('The discovered MCP server is no longer enabled. Use mcp_search for an available capability.');
@@ -443,6 +511,9 @@ export class BoundedGate {
       throw error;
     }
     this.remember(tool, server);
+    const successList = this.successfulCallsThisTurn.get(tool) ?? [];
+    successList.push({ args: structuredClone(args), at: Date.now() });
+    this.successfulCallsThisTurn.set(tool, successList.slice(-8));
     // The adapter's output guard preserves large results in a local spill file.
     // Do not duplicate its bounded raw MCP details into the model context.
     return { content: dedupeContent(result.content), details: { server, tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };

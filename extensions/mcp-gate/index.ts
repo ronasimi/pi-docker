@@ -3,6 +3,7 @@ import { Type } from 'typebox';
 import { createMcpAdapter } from 'pi-mcp-adapter';
 import { ALLOWED_TOOLS, BoundedGate, gateConfig } from './gate.mjs';
 import { installWhiteRabbitReasoning } from './reasoning.mjs';
+import { thinkingOnlyBoundaryResult } from './runtime-guards.mjs';
 
 export default function boundedMcp(pi: any) {
   installWhiteRabbitReasoning(pi);
@@ -25,16 +26,23 @@ export default function boundedMcp(pi: any) {
     return proxy.execute(`bounded-mcp-${++callId}`, args, signal, undefined, context);
   });
   const enforce = () => pi.setActiveTools(pi.getActiveTools().filter((name: string) => ALLOWED_TOOLS.includes(name)));
+  let thinkingContinuationUsed = false;
   const restore = (_event: any, ctx: any) => {
     enforce();
+    thinkingContinuationUsed = false;
     gate.restore(ctx.sessionManager.getBranch());
   };
   pi.on('session_start', restore);
   pi.on('session_tree', restore);
-  pi.on('before_agent_start', () => { enforce(); gate.beginTurn(); });
+  pi.on('before_agent_start', (event: any) => { enforce(); thinkingContinuationUsed = false; gate.beginTurn(event.prompt); });
   pi.on('turn_start', enforce);
   pi.on('tool_call', (event: any) => {
     if (!ALLOWED_TOOLS.includes(event.toolName)) return { block: true, reason: 'Optional native tools are disabled. Use mcp_search to discover the capability, then mcp_call.' };
+  });
+  pi.on('agent_before_settle', (event: any) => {
+    const result = thinkingOnlyBoundaryResult(event, thinkingContinuationUsed);
+    if (result) thinkingContinuationUsed = true;
+    return result;
   });
   pi.registerTool({
     name: 'mcp_search', label: 'MCP search',
@@ -52,7 +60,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and arguments separately in args; for no arguments use {tool: \"exact_name\", args: {}} and never append {} to the name. Reuse discovered tools across follow-ups. If a small model accidentally omits tool, the gate may recover only when one already-discovered schema matches args unambiguously; otherwise the call fails safely. A successful call completes only that capability: on multi-step requests, continue searching/calling every other explicit requested capability before finalizing. Continue partial/paginated results before concluding.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and arguments separately in args; for no arguments use {tool: \"exact_name\", args: {}} and never append {} to the name. Reuse discovered tools across follow-ups. If a small model accidentally omits tool, the gate may recover only when one already-discovered schema matches args unambiguously; otherwise the call fails safely. A successful call completes only that capability: on multi-step requests, continue searching/calling every other explicit requested capability before finalizing. Successful read-only calls with equivalent/default arguments are blocked from repeating in the same user turn unless the user explicitly asks for a fresh rerun; status/poll tools remain repeatable. Continue partial/paginated results before concluding.',
     executionMode: 'sequential',
     parameters: Type.Object({
       tool: Type.Optional(Type.String()),

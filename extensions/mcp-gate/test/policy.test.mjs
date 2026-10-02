@@ -20,6 +20,8 @@ test('system prompt enforces multi-step completion and evidence grounding', asyn
   assert.match(prompt, /Unknown stays unknown/i);
   assert.match(prompt, /do not infer a remote host's wired\/wireless attachment/i);
   assert.match(prompt, /HE\/NSS\/GI are PHY fields/i);
+  assert.match(prompt, /runtime blocks that no-progress loop/i);
+  assert.match(prompt, /emit the tool call immediately/i);
 });
 
 test('published Web UI allowlist preserves restrictive presets and blocks optional reactivation', { skip: !webPackage }, async () => {

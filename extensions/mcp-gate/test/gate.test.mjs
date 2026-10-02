@@ -242,9 +242,50 @@ test('an explicit identical retry reaches the server after recovery without auto
 });
 test('unchanged successful status results can be polled repeatedly', async () => {
   const { gate, calls } = fixture();
-  await gate.search({ query: 'navigate' });
-  for (let i = 0; i < 4; i++) await gate.call({ tool: 'navigate_0' });
+  await gate.search({ query: 'status' });
+  for (let i = 0; i < 4; i++) await gate.call({ tool: 'status_0' });
   assert.equal(calls.filter(c => c.tool).length, 4);
+});
+
+test('blocks a repeated successful read-only call with equivalent arguments in one user turn', async () => {
+  const { gate, calls } = fixture();
+  gate.beginTurn('Discover the network, then continue with topology and wireless analysis.');
+  await gate.search({ query: 'navigate', server: 'playwright', limit: 1 });
+  await gate.call({ tool: 'navigate_0', args: { url: 'https://example.com' } });
+  await assert.rejects(
+    gate.call({ tool: 'navigate_0', args: { url: 'https://example.com' } }),
+    /No-progress MCP call blocked/,
+  );
+  assert.equal(calls.filter(c => c.tool).length, 1);
+});
+
+test('blocks all-optional empty-default replay after a successful explicit read-only call', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: [{ server: 'security', tool: 'security_perform_network_discovery' }], hasMore: false, nextOffset: null } };
+    if (params.describe) return { details: { tool: { description: 'Read-only comprehensive network discovery.', inputSchema: {
+      type: 'object', properties: { cidrs: { type: 'array', items: { type: 'string' } }, interface: { type: 'string' } }, required: [], additionalProperties: false,
+    } } } };
+    return { content: [{ type: 'text', text: 'ok' }], details: {} };
+  });
+  gate.beginTurn('Discover the network, then analyze topology.');
+  await gate.search({ query: 'network discovery', server: 'security', limit: 1 });
+  await gate.call({ tool: 'security_perform_network_discovery', args: { cidrs: ['192.168.1.0/24'], interface: 'wlp3s0' } });
+  await assert.rejects(gate.call({ tool: 'security_perform_network_discovery' }), /No-progress MCP call blocked/);
+  assert.equal(calls.filter(c => c.tool).length, 1);
+});
+
+test('explicit user request for a fresh successful rerun bypasses the no-progress guard', async () => {
+  const { gate, calls } = fixture();
+  gate.beginTurn('Read the same page again to refresh it.');
+  await gate.search({ query: 'navigate', server: 'playwright', limit: 1 });
+  const params = { tool: 'navigate_0', args: { url: 'https://example.com' } };
+  await gate.call(params);
+  await gate.call(params);
+  assert.equal(calls.filter(c => c.tool).length, 2);
 });
 test('oversized schema is never truncated into a callable grant', async () => {
   const { gate } = fixture({ schemaSize: LIMITS.discoveryBytes + 10 });
@@ -264,11 +305,11 @@ test('per-turn budgets and argument types remain bounded with identical calls', 
   for (let i = 0; i < LIMITS.searches; i++) await gate.search({ query: 'nav' + i });
   await assert.rejects(gate.search({ query: 'more' }), /budget/);
   await assert.rejects(gate.call({ tool: 'nav5_0', args: [] }), /JSON object/);
-  for (let i = 0; i < LIMITS.calls; i++) await gate.call({ tool: 'nav5_0' });
-  await assert.rejects(gate.call({ tool: 'nav5_0' }), /budget/);
+  for (let i = 0; i < LIMITS.calls; i++) await gate.call({ tool: 'nav5_0', args: { url: `https://example.com/${i}` } });
+  await assert.rejects(gate.call({ tool: 'nav5_0', args: { url: 'https://example.com/overflow' } }), /budget/);
   assert.equal(calls.filter(c => c.tool).length, LIMITS.calls);
   gate.beginTurn();
-  await gate.call({ tool: 'nav5_0' });
+  await gate.call({ tool: 'nav5_0', args: { url: 'https://example.com/after-reset' } });
 });
 test('failed retries also consume the per-turn execution budget', async () => {
   const { gate, calls } = fixture({ fail: true });

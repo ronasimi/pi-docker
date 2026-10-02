@@ -1,3 +1,11 @@
+# 2026-10-02 — Runtime no-progress and thinking-only continuation guards
+
+- Block repeated successful **read-only** MCP calls with equivalent arguments inside one user turn. All-optional tools also treat an immediate empty/default replay after a successful explicit call as equivalent, preventing expensive operations such as network discovery from running twice.
+- Keep status/health/poll-style tools repeatable and allow fresh reruns when the user explicitly asks to rerun/recheck/refresh/repeat the operation. Failed calls are still retryable and are never auto-replayed.
+- Add a one-shot `agent_before_settle` continuation guard for assistant messages that contain reasoning/thinking but no visible text or tool call. It appends a hidden continuation message and requests exactly one more provider turn.
+- Preserve the existing missing-tool recovery, query-scoped MCP discovery, evidence-grounding rules, per-turn budgets, and discovery grant LRU.
+- Validation in this archive: 29/29 gate/runtime-guard unit tests pass; policy tests pass with environment-only cases skipped. SDK integration/reasoning tests still require the Pi development dependency when run outside the built image.
+
 # 2026-10-02 — Small-model missing MCP tool-name recovery
 
 - Diagnose a Gemma 4 E2B serialization failure where `mcp_call` emitted a valid `args` object but omitted the required `tool` field, causing Pi-side validation to reject the call before the bounded gate could recover it.

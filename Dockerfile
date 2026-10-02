@@ -29,7 +29,7 @@ COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-
 COPY scripts/patch-web-tool-policy.mjs scripts/configure-tool-policy.mjs /usr/local/lib/pi-docker/
 COPY extensions/mcp-gate/package*.json /opt/pi-mcp-gate/
 RUN cd /opt/pi-mcp-gate && npm ci --ignore-scripts --omit=dev --no-audit --no-fund
-COPY extensions/mcp-gate/index.ts extensions/mcp-gate/gate.mjs extensions/mcp-gate/reasoning.mjs /opt/pi-mcp-gate/
+COPY extensions/mcp-gate/index.ts extensions/mcp-gate/gate.mjs extensions/mcp-gate/reasoning.mjs extensions/mcp-gate/runtime-guards.mjs /opt/pi-mcp-gate/
 RUN node /usr/local/lib/pi-docker/patch-web-tool-policy.mjs /usr/local/lib/node_modules/pi-web-ui
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
