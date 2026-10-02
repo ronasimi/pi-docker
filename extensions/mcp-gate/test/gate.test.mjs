@@ -162,6 +162,62 @@ test('normalizes a small-model empty-args suffix only for an already discovered 
   await assert.rejects(gate.call({ tool: 'invented{}' }), /not discovered/);
   await assert.rejects(gate.call({ tool: 'navigate_0{\"url\":\"x\"}' }), /not discovered/);
 });
+
+
+test('recovers a missing mcp_call tool only when discovered schema matching is unambiguous', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const schemas = {
+    security_get_host_interface_info: {
+      type: 'object',
+      properties: { interface: { type: 'string' }, internet_check: { type: 'boolean' } },
+      additionalProperties: false,
+    },
+    security_perform_network_discovery: {
+      type: 'object',
+      properties: {
+        cidrs: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+        interface: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    security_network_interfaces: { type: 'object', properties: {}, additionalProperties: false },
+  };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: Object.keys(schemas).map(tool => ({ server: 'security', tool })), hasMore: false, nextOffset: null } };
+    if (params.describe) return { details: { tool: { description: params.describe, inputSchema: schemas[params.describe] } } };
+    return { content: [{ type: 'text', text: 'ok' }], details: {} };
+  });
+  await gate.search({ query: 'host network state', server: 'security' });
+  await gate.call({ args: { cidrs: ['192.168.1.0/24'], interface: 'wlp3s0' } });
+  assert.deepEqual(calls.at(-1), {
+    server: 'security',
+    tool: 'security_perform_network_discovery',
+    args: { cidrs: ['192.168.1.0/24'], interface: 'wlp3s0' },
+  });
+});
+
+test('missing mcp_call tool fails closed when schema matching is ambiguous', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: [
+      { server: 'security', tool: 'security_alpha' },
+      { server: 'security', tool: 'security_beta' },
+    ], hasMore: false, nextOffset: null } };
+    if (params.describe) return { details: { tool: { description: params.describe, inputSchema: {
+      type: 'object', properties: { target: { type: 'string' } }, required: ['target'], additionalProperties: false,
+    } } } };
+    return { content: [{ type: 'text', text: 'should-not-run' }], details: {} };
+  });
+  await gate.search({ query: 'scan target', server: 'security' });
+  await assert.rejects(gate.call({ args: { target: '192.168.1.1' } }), /safe recovery was ambiguous/);
+  assert.equal(calls.filter(c => c.tool).length, 0);
+});
 test('discovery survives follow-up turns but a new conversation requires discovery', async () => {
   const { gate, calls } = fixture();
   await assert.rejects(gate.call({ tool: 'invented' }), /not discovered/);

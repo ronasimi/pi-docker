@@ -1,3 +1,12 @@
+# 2026-10-02 — Small-model missing MCP tool-name recovery
+
+- Diagnose a Gemma 4 E2B serialization failure where `mcp_call` emitted a valid `args` object but omitted the required `tool` field, causing Pi-side validation to reject the call before the bounded gate could recover it.
+- Make the model-facing `tool` field syntactically optional so malformed small-model calls reach the compatibility layer, while keeping exact discovered tool names as the required semantic behavior.
+- Retain discovered input schemas internally and infer an omitted tool only when the arguments match exactly one recently discovered schema (or exactly one retained grant). Ambiguous or unmatched calls fail closed; no fuzzy name repair or invented tool selection is allowed.
+- Preserve the existing `tool{}` empty-argument normalization and discovery/LRU/security bounds.
+- Add regression coverage for the observed `security_perform_network_discovery` call shape and for ambiguous-schema rejection.
+- Validation in this archive: 23/23 bounded-gate unit tests pass. Full SDK integration/reasoning tests still require the Pi development dependency that is not installed in this editing environment.
+
 - Add a multi-step MCP completion contract: each explicitly requested capability must either complete successfully or receive its own exhausted discovery before the model may finalize.
 - Mark every `mcp_search` result as query-scoped (`catalogComplete: false`) and explicitly warn that a search result is not a complete server catalog.
 - Add evidence-grounding rules for unknown/not-tested states and network-specific inference errors (remote wired/wireless attachment, L2 observation, Wi-Fi HE/NSS/GI, single-sample stability).

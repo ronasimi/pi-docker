@@ -141,6 +141,52 @@ export function rankDiscoveryMatches(config, query, matches = []) {
 }
 
 
+function primitiveTypeMatches(type, value) {
+  if (!type) return true;
+  if (Array.isArray(type)) return type.some(t => primitiveTypeMatches(t, value));
+  if (type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (type === 'array') return Array.isArray(value);
+  if (type === 'string') return typeof value === 'string';
+  if (type === 'boolean') return typeof value === 'boolean';
+  if (type === 'integer') return Number.isInteger(value);
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+  if (type === 'null') return value === null;
+  return true;
+}
+
+function schemaValueMatches(schema, value) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return true;
+  if (Array.isArray(schema.anyOf)) return schema.anyOf.some(s => schemaValueMatches(s, value));
+  if (Array.isArray(schema.oneOf)) return schema.oneOf.filter(s => schemaValueMatches(s, value)).length === 1;
+  if (Array.isArray(schema.enum) && !schema.enum.some(v => Object.is(v, value))) return false;
+  if (!primitiveTypeMatches(schema.type, value)) return false;
+
+  if (typeof value === 'string') {
+    if (Number.isFinite(schema.minLength) && value.length < schema.minLength) return false;
+    if (Number.isFinite(schema.maxLength) && value.length > schema.maxLength) return false;
+  }
+  if (Array.isArray(value)) {
+    if (Number.isFinite(schema.minItems) && value.length < schema.minItems) return false;
+    if (Number.isFinite(schema.maxItems) && value.length > schema.maxItems) return false;
+    if (schema.items && !value.every(item => schemaValueMatches(schema.items, item))) return false;
+  }
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const properties = schema.properties && typeof schema.properties === 'object' ? schema.properties : {};
+    const required = Array.isArray(schema.required) ? schema.required : [];
+    if (required.some(key => !Object.hasOwn(value, key))) return false;
+    if (schema.additionalProperties === false && Object.keys(value).some(key => !Object.hasOwn(properties, key))) return false;
+    for (const [key, item] of Object.entries(value)) {
+      if (Object.hasOwn(properties, key) && !schemaValueMatches(properties[key], item)) return false;
+    }
+  }
+  return true;
+}
+
+export function schemaAcceptsArgs(schema, args) {
+  return schemaValueMatches(schema ?? { type: 'object' }, args);
+}
+
+
 // Keep the real adapter's transports, argument validation, approval handling,
 // reconnect logic, and output guard. Only its model-facing surface is replaced.
 export function gateConfig(input) {
@@ -167,6 +213,8 @@ export class BoundedGate {
   }
   reset() {
     this.grants = new Map();
+    this.grantSchemas = new Map();
+    this.recentSearchTools = [];
     this.connected = new Set();
     this.discoveryCache = new Map();
     this.beginTurn();
@@ -178,11 +226,16 @@ export class BoundedGate {
   enabled(server) {
     return Object.hasOwn(this.config.mcpServers ?? {}, server) && this.config.mcpServers[server].disabled !== true;
   }
-  remember(tool, server) {
+  remember(tool, server, schema = undefined) {
     if (typeof tool !== 'string' || !tool || tool.length > 256 || typeof server !== 'string' || !this.enabled(server)) return;
     this.grants.delete(tool);
     this.grants.set(tool, server);
-    while (this.grants.size > LIMITS.grants) this.grants.delete(this.grants.keys().next().value);
+    if (schema && typeof schema === 'object' && !Array.isArray(schema)) this.grantSchemas.set(tool, schema);
+    while (this.grants.size > LIMITS.grants) {
+      const evicted = this.grants.keys().next().value;
+      this.grants.delete(evicted);
+      this.grantSchemas.delete(evicted);
+    }
   }
   // Restore only successful discovery on the active branch, including sessions
   // recorded by the old gate. Retain identifiers, not schemas or tool outputs.
@@ -198,7 +251,7 @@ export class BoundedGate {
             const value = JSON.parse(block.text);
             if (!Array.isArray(value?.tools)) continue;
             for (const item of value.tools.slice(0, LIMITS.results)) {
-              if (item?.inputSchema && typeof item.inputSchema === 'object' && !Array.isArray(item.inputSchema)) this.remember(item.tool, item.server);
+              if (item?.inputSchema && typeof item.inputSchema === 'object' && !Array.isArray(item.inputSchema)) this.remember(item.tool, item.server, item.inputSchema);
             }
           } catch { /* Ignore non-discovery or malformed historical output. */ }
         }
@@ -324,18 +377,45 @@ export class BoundedGate {
     while (bytes(output) > LIMITS.discoveryBytes && output.errors.length) output.errors.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.omitted.length) output.omitted.pop();
     while (bytes(output) > LIMITS.discoveryBytes && output.tools.length) output.tools.pop();
-    for (const item of output.tools) this.remember(item.tool, item.server);
+    this.recentSearchTools = output.tools.map(item => ({ tool: item.tool, server: item.server, inputSchema: item.inputSchema }));
+    for (const item of output.tools) this.remember(item.tool, item.server, item.inputSchema);
     return data(output);
   }
   async call(params, signal) {
     if (signal?.aborted) throw signal.reason;
     let tool = params.tool;
     let args = params.args;
+    if (typeof args === 'string') {
+      try { args = JSON.parse(args); } catch { failure('args must be a JSON object or a string encoding one.'); }
+    }
+    args ??= {};
+    if (!args || Array.isArray(args) || typeof args !== 'object') failure('args must be a JSON object.');
+
+    // Small local models can occasionally omit the `tool` field while still
+    // emitting a valid argument object. Recover only when schema matching makes
+    // the intended already-discovered tool unambiguous. Prefer the most recent
+    // search slice; fall back to all retained grants only when that also yields
+    // exactly one match. Never fuzzy-match names or choose among ambiguities.
+    if (tool == null || tool === '') {
+      const matching = candidates => candidates.filter(item =>
+        this.grants.get(item.tool) === item.server && schemaAcceptsArgs(item.inputSchema, args));
+      let candidates = matching(this.recentSearchTools);
+      if (candidates.length !== 1) {
+        candidates = matching([...this.grantSchemas.entries()].map(([name, inputSchema]) => ({
+          tool: name, server: this.grants.get(name), inputSchema,
+        })));
+      }
+      if (candidates.length !== 1) {
+        failure(`mcp_call omitted the required tool name and safe recovery was ${candidates.length ? 'ambiguous' : 'not possible'}. Run mcp_search for the capability and retry with {tool: "exact_returned_name", args: {...}}.`);
+      }
+      tool = candidates[0].tool;
+    }
+
     // Some small local models occasionally serialize an empty argument object as
     // part of the tool-name string (for example `security_status{}`). Accept only
     // this exact, unambiguous suffix when the stripped name is already granted.
     // Do not perform fuzzy matching or repair arbitrary tool names.
-    if (typeof tool === 'string' && args == null && tool.endsWith('{}') && !this.grants.has(tool)) {
+    if (typeof tool === 'string' && tool.endsWith('{}') && !this.grants.has(tool) && Object.keys(args).length === 0) {
       const stripped = tool.slice(0, -2);
       if (this.grants.has(stripped)) {
         tool = stripped;
@@ -348,11 +428,6 @@ export class BoundedGate {
       this.grants.delete(tool);
       failure('The discovered MCP server is no longer enabled. Use mcp_search for an available capability.');
     }
-    args ??= {};
-    if (typeof args === 'string') {
-      try { args = JSON.parse(args); } catch { failure('args must be a JSON object or a string encoding one.'); }
-    }
-    if (!args || Array.isArray(args) || typeof args !== 'object') failure('args must be a JSON object.');
     if (++this.calls > LIMITS.calls) failure('MCP call budget reached for this user turn (24). Report progress and the remaining work.');
     let result;
     try {

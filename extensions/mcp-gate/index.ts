@@ -52,10 +52,10 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and arguments separately in args; for no arguments use {tool: \"exact_name\", args: {}} and never append {} to the name. Reuse discovered tools across follow-ups. A successful call completes only that capability: on multi-step requests, continue searching/calling every other explicit requested capability before finalizing. Continue partial/paginated results before concluding.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and arguments separately in args; for no arguments use {tool: \"exact_name\", args: {}} and never append {} to the name. Reuse discovered tools across follow-ups. If a small model accidentally omits tool, the gate may recover only when one already-discovered schema matches args unambiguously; otherwise the call fails safely. A successful call completes only that capability: on multi-step requests, continue searching/calling every other explicit requested capability before finalizing. Continue partial/paginated results before concluding.',
     executionMode: 'sequential',
     parameters: Type.Object({
-      tool: Type.String(),
+      tool: Type.Optional(Type.String()),
       args: Type.Optional(Type.Union([Type.Object({}, { additionalProperties: true }), Type.String()])),
     }),
     async execute(_id: string, params: any, signal: AbortSignal, _update: any, ctx: any) {
