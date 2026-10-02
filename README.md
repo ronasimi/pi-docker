@@ -17,6 +17,8 @@ The model receives exactly these tools in the standard agent preset:
 |---|---|
 | `read`, `write`, `edit`, `bash` | Core local file and shell operations |
 | `mcp_search` | Discover up to three matching MCP schemas |
+
+`mcp_search` uses singular `query` as the canonical argument. For small-model compatibility, the extension also accepts exactly one string in `queries: [...]` and normalizes it before discovery; empty/multi-item arrays and conflicting `query`/`queries[0]` values fail closed.
 | `mcp_call` | Invoke an exact discovered MCP tool |
 
 All optional Pi Web UI tools are disabled, including `browser_page`, subagents, terminal helpers, skills, scheduling, and direct MCP tools. Installed optional Pi packages are retained but their extensions, skills, and prompts are disabled. The original settings are backed up. The Web UI remains available; this changes the model's tools.

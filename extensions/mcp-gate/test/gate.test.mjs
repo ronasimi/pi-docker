@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, inferServerForQuery, LIMITS, rankDiscoveryMatches } from '../gate.mjs';
+import { ALLOWED_TOOLS, BoundedGate, gateConfig, dedupeContent, inferServerForQuery, LIMITS, normalizeSearchParams, rankDiscoveryMatches } from '../gate.mjs';
 
 function fixture(options = {}) {
   const calls = [];
@@ -16,6 +16,33 @@ function fixture(options = {}) {
   return { gate, calls };
 }
 
+
+test('normalizes the single-item mcp_search queries alias without enabling batched discovery', () => {
+  assert.deepEqual(
+    normalizeSearchParams({ queries: ['host network interface state'], server: 'security', limit: 1 }),
+    { query: 'host network interface state', server: 'security', limit: 1 },
+  );
+  assert.deepEqual(
+    normalizeSearchParams({ query: 'network status', queries: ['network status'], server: 'security' }),
+    { query: 'network status', server: 'security' },
+  );
+  assert.throws(() => normalizeSearchParams({ queries: [] }), /exactly one string/i);
+  assert.throws(() => normalizeSearchParams({ queries: ['one', 'two'] }), /exactly one string/i);
+  assert.throws(
+    () => normalizeSearchParams({ query: 'network status', queries: ['host interfaces'] }),
+    /conflicting query and queries\[0\]/i,
+  );
+  assert.throws(() => normalizeSearchParams({}), /requires a specific capability query/i);
+});
+
+test('mcp_search executes a single-item queries alias as the canonical query', async () => {
+  const { gate, calls } = fixture();
+  const result = JSON.parse((await gate.search({ queries: ['navigate'], server: 'playwright', limit: 1 })).content[0].text);
+  assert.equal(result.tools.length, 1);
+  const search = calls.find(call => Object.hasOwn(call, 'search'));
+  assert.equal(search.search, 'navigate');
+  assert.equal(search.server, 'playwright');
+});
 
 test('family-aware discovery prevents broad server terms from outranking the requested capability', () => {
   const config = {

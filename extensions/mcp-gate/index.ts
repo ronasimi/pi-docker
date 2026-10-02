@@ -49,7 +49,15 @@ export default function boundedMcp(pi: any) {
     description: 'Discover bounded MCP tools for one capability query. Security work should use server=security; the gate also strongly infers security routing when omitted. Returns up to 3 ranked schemas plus hasMore/nextOffset. Results are query matches, not a server catalog: for a different outstanding capability, search again before claiming it is unavailable. Validate schema fit and call only an exact returned tool.',
     executionMode: 'sequential',
     parameters: Type.Object({
-      query: Type.String({ minLength: 1, maxLength: 200 }),
+      // `query` is canonical. `queries` is a narrow compatibility alias for
+      // small local models that occasionally pluralize the field. Both are
+      // optional at schema-validation time so the gate can normalize/reject
+      // deterministically instead of Pi rejecting the call before execution.
+      query: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Canonical single capability query. Prefer this field.' })),
+      queries: Type.Optional(Type.Array(
+        Type.String({ minLength: 1, maxLength: 200 }),
+        { minItems: 1, maxItems: 1, description: 'Compatibility alias for query. Exactly one string; do not use for batching.' },
+      )),
       server: Type.Optional(Type.String()),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 3 })),
       offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000 })),

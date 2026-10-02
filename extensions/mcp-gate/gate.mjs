@@ -29,6 +29,40 @@ function localToolName(match) {
   const prefix = `${match.server}_`;
   return typeof match.tool === 'string' && match.tool.startsWith(prefix) ? match.tool.slice(prefix.length) : String(match.tool ?? '');
 }
+export function normalizeSearchParams(params = {}) {
+  if (!params || Array.isArray(params) || typeof params !== 'object') {
+    failure('mcp_search arguments must be an object.');
+  }
+
+  const hasQueryField = Object.hasOwn(params, 'query');
+  const hasQueriesField = Object.hasOwn(params, 'queries');
+  if (hasQueryField && params.query != null && typeof params.query !== 'string') {
+    failure('mcp_search query must be a string.');
+  }
+
+  let canonical = typeof params.query === 'string' ? params.query.trim() : '';
+  let alias = '';
+  if (hasQueriesField) {
+    if (!Array.isArray(params.queries) || params.queries.length !== 1 || typeof params.queries[0] !== 'string') {
+      failure('mcp_search queries compatibility alias must contain exactly one string. Use {query: "capability"}; batching multiple capability searches is not supported.');
+    }
+    alias = params.queries[0].trim();
+    if (!alias) failure('mcp_search queries compatibility alias must contain one non-empty string.');
+  }
+
+  if (canonical && alias && canonical !== alias) {
+    failure('mcp_search received conflicting query and queries[0] values. Use one canonical query string.');
+  }
+  canonical ||= alias;
+  if (!canonical || canonical.length > LIMITS.queryChars) {
+    failure('mcp_search requires a specific capability query of 1–200 characters.');
+  }
+
+  const normalizedParams = { ...params, query: canonical };
+  delete normalizedParams.queries;
+  return normalizedParams;
+}
+
 export function inferServerForQuery(config, query) {
   const q = normalized(query);
   const enabled = name => Object.hasOwn(config.mcpServers ?? {}, name) && config.mcpServers[name].disabled !== true;
@@ -425,8 +459,8 @@ export class BoundedGate {
   }
   async search(params, signal) {
     if (signal?.aborted) throw signal.reason;
-    const query = typeof params.query === 'string' ? params.query.trim() : '';
-    if (!query || query.length > LIMITS.queryChars) failure('mcp_search requires a specific capability query of 1–200 characters.');
+    params = normalizeSearchParams(params);
+    const query = params.query;
     if (++this.searches > LIMITS.searches) failure('MCP search budget reached for this user turn (6). Use a discovered tool or report the concrete blocker.');
     const limit = Math.min(LIMITS.results, Math.max(1, Math.floor(Number(params.limit) || LIMITS.results)));
     const offset = Math.min(1000, Math.max(0, Math.floor(Number(params.offset) || 0)));

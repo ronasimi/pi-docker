@@ -18,7 +18,7 @@ test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reloa
   let failNext = false;
   const scripted = [
     ['mcp_call', { tool: 'playwright_browser_navigate', args: { url: 'https://example.com' } }],
-    ['mcp_search', { query: 'browser_navigate', server: 'playwright' }],
+    ['mcp_search', { queries: ['browser_navigate'], server: 'playwright' }],
     ['mcp_call', { tool: 'playwright_browser_navigate', args: {} }],
     ['mcp_call', { tool: 'playwright_browser_navigate', args: {} }],
     ['mcp_call', { tool: 'playwright_browser_navigate', args: { url: 'https://example.com' } }],
@@ -78,6 +78,10 @@ test('real Pi SDK + adapter: discovery, validation, repeat calls, retries, reloa
     assert.match(searchTool.function.description, /hasMore\/nextOffset/);
     assert.match(searchTool.function.description, /not a server catalog/i);
     assert.match(searchTool.function.description, /different outstanding capability/i);
+    assert.equal(searchTool.function.parameters.properties.query.type, 'string');
+    assert.equal(searchTool.function.parameters.properties.queries.type, 'array');
+    assert.equal(searchTool.function.parameters.properties.queries.minItems, 1);
+    assert.equal(searchTool.function.parameters.properties.queries.maxItems, 1);
     const callTool = requests[0].tools.find(t => t.function.name === 'mcp_call');
     assert.ok(callTool, 'mcp_call schema is exposed');
     assert.match(callTool.function.description, /successful call completes only that capability/i);

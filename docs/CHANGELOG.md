@@ -1,3 +1,10 @@
+# 2026-10-02 — Small-model mcp_search query alias compatibility
+
+- Keep singular `query` as the canonical `mcp_search` argument while accepting the observed Gemma 4 E2B serialization variant `queries: ["capability"]` at the native Pi tool-schema boundary.
+- Normalize only a single non-empty alias item into `query` before bounded discovery. Empty arrays, multi-item arrays, non-string values, and conflicting `query`/`queries[0]` values fail closed.
+- Do not add batched discovery: the existing one-capability query semantics, search budgets, server routing, pagination, grant handling, and schema-fit requirements remain unchanged.
+- Add unit regressions for alias normalization and end-to-end bounded-gate execution of the malformed call shape observed in the attached session.
+
 # 2026-10-02 — Upstream Pi 1.0 runtime and direct network-map handoff
 - Raise the default runtime pins to `@earendil-works/pi-coding-agent` 1.0.0 and `pi-web-ui` 0.97.0 so the actionable `agent_before_settle` boundary used by the one-shot continuation guard is present.
 - Add a build-time runtime verifier that checks the global/nested Pi versions match and that `agent_before_settle` exists.
