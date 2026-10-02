@@ -150,6 +150,14 @@ test('cold search connects selected server, clamps limit, returns complete schem
   await gate.search({ query: 'navigate', server: 'playwright' });
   assert.equal(calls.filter(c => c.connect).length, 1);
 });
+test('normalizes a small-model empty-args suffix only for an already discovered exact tool', async () => {
+  const { gate, calls } = fixture();
+  await gate.search({ query: 'navigate', server: 'playwright', limit: 1 });
+  await gate.call({ tool: 'navigate_0{}' });
+  assert.deepEqual(calls.at(-1), { server: 'playwright', tool: 'navigate_0', args: {} });
+  await assert.rejects(gate.call({ tool: 'invented{}' }), /not discovered/);
+  await assert.rejects(gate.call({ tool: 'navigate_0{\"url\":\"x\"}' }), /not discovered/);
+});
 test('discovery survives follow-up turns but a new conversation requires discovery', async () => {
   const { gate, calls } = fixture();
   await assert.rejects(gate.call({ tool: 'invented' }), /not discovered/);

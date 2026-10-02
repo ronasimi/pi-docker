@@ -1,4 +1,5 @@
 # 2026-10-01 — WhiteRabbitNeo bounded discovery continuation hardening
+- Harden `mcp_call` for small local models that serialize an empty argument object as an exact discovered tool name plus `{}`; normalize only that unambiguous suffix and keep arbitrary/fuzzy tool-name repair disabled.
 
 - Route strong security, System/OpenWrt, Google, browser, web-search, and memory capability queries to the matching MCP server when a small model omits the filter; security prompts still require explicit `server=security`.
 - Make `mcp_search` and `mcp_call` sequential at the Pi tool layer so dependent discovery/execution calls cannot race as sibling tool calls.

@@ -328,13 +328,26 @@ export class BoundedGate {
   }
   async call(params, signal) {
     if (signal?.aborted) throw signal.reason;
-    const server = this.grants.get(params.tool);
-    if (!server) failure(`Tool not discovered in this conversation (or evicted from the ${LIMITS.grants}-tool cache). Run mcp_search for the requested capability, then retry mcp_call with an exact returned name. This is a discovery requirement, not a target or service failure.`);
+    let tool = params.tool;
+    let args = params.args;
+    // Some small local models occasionally serialize an empty argument object as
+    // part of the tool-name string (for example `security_status{}`). Accept only
+    // this exact, unambiguous suffix when the stripped name is already granted.
+    // Do not perform fuzzy matching or repair arbitrary tool names.
+    if (typeof tool === 'string' && args == null && tool.endsWith('{}') && !this.grants.has(tool)) {
+      const stripped = tool.slice(0, -2);
+      if (this.grants.has(stripped)) {
+        tool = stripped;
+        args = {};
+      }
+    }
+    const server = this.grants.get(tool);
+    if (!server) failure(`Tool not discovered in this conversation (or evicted from the ${LIMITS.grants}-tool cache). Run mcp_search for the requested capability, then retry mcp_call with an exact returned name. Pass empty arguments separately as args: {}; never append {} to the tool name. This is a discovery requirement, not a target or service failure.`);
     if (!this.enabled(server)) {
-      this.grants.delete(params.tool);
+      this.grants.delete(tool);
       failure('The discovered MCP server is no longer enabled. Use mcp_search for an available capability.');
     }
-    let args = params.args ?? {};
+    args ??= {};
     if (typeof args === 'string') {
       try { args = JSON.parse(args); } catch { failure('args must be a JSON object or a string encoding one.'); }
     }
@@ -345,7 +358,7 @@ export class BoundedGate {
       // Resumed sessions reconnect before the adapter validates and executes.
       await this.connect(server, signal);
       if (signal?.aborted) throw signal.reason;
-      result = await this.invoke({ tool: params.tool, server, args }, signal);
+      result = await this.invoke({ tool, server, args }, signal);
       if (failed(result)) failure(textOf(result).slice(0, 2500) || 'MCP operation failed.');
     } catch (error) {
       // Let a subsequent explicit call reconnect and retry. Never replay a
@@ -353,10 +366,10 @@ export class BoundedGate {
       this.connected.delete(server);
       throw error;
     }
-    this.remember(params.tool, server);
+    this.remember(tool, server);
     // The adapter's output guard preserves large results in a local spill file.
     // Do not duplicate its bounded raw MCP details into the model context.
-    return { content: dedupeContent(result.content), details: { server, tool: params.tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };
+    return { content: dedupeContent(result.content), details: { server, tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };
   }
 }
 

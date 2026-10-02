@@ -52,7 +52,7 @@ export default function boundedMcp(pi: any) {
   });
   pi.registerTool({
     name: 'mcp_call', label: 'MCP call',
-    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Reuse discovered tools across follow-up messages and status polling. Supply args matching its schema. If a result is partial, truncated, paginated, or reports hasMore, continue with its returned cursor/offset or a dedicated summary tool before concluding.',
+    description: 'Execute an exact tool previously returned by mcp_search in this conversation. Pass the exact tool name in tool and its arguments separately in args. For an empty schema use {tool: \"exact_name\", args: {}}; never append {} to the tool name. Reuse discovered tools across follow-up messages and status polling. If a result is partial, truncated, paginated, or reports hasMore, continue with its returned cursor/offset or a dedicated summary tool before concluding.',
     executionMode: 'sequential',
     parameters: Type.Object({
       tool: Type.String(),

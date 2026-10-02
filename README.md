@@ -25,6 +25,8 @@ For capabilities outside exposed native tools:
 ```text
 mcp_search({query: "browser_navigate", server: "playwright"})
 mcp_call({tool: "<exact returned name>", args: {url: "https://www.cbc.ca/news"}})
+
+For tools with no arguments, keep the empty object separate: `mcp_call({tool: "<exact returned name>", args: {}})`. The gate tolerates the narrow small-model mistake `<exact returned name>{}` only when that exact stripped tool was already discovered; arbitrary/fuzzy tool-name repair remains disabled.
 ```
 
 Use the actual name returned by search. The model must not issue it as a native function. A named-page/headline request routes to Playwright and reads the live snapshot. SearXNG provides web search; search snippets alone do not prove which headlines are latest. System infrastructure, Google Workspace, and security capabilities remain behind the same bounded discovery flow; security tools are reached through the dedicated `security` server rather than generic Bash when available.
