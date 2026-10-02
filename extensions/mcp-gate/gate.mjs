@@ -222,6 +222,44 @@ export function promptExplicitlyRequestsSuccessfulRepeat(prompt = '') {
     || /\b(twice|two times|second pass)\b/.test(text);
 }
 
+
+const NETWORK_RECON_RESULT_KEYS = Object.freeze({
+  security_get_host_interface_info: 'get_host_interface_info',
+  security_perform_network_discovery: 'perform_network_discovery',
+  security_analyze_network_topology: 'analyze_network_topology',
+  security_analyze_wireless_environment: 'analyze_wireless_environment',
+});
+const NETWORK_MAP_TOOL = 'security_generate_graphical_network_map';
+
+export function requestedNetworkWorkflowStages(prompt = '') {
+  const text = normalized(prompt);
+  const stages = [];
+  const add = (stage, tool, pattern) => { if (pattern.test(text)) stages.push({ stage, tool }); };
+  add('host network state', 'security_get_host_interface_info', /\b(host network state|physical network interfaces?|active connection|ipv4|ipv6|default gateway|link speed|internet connectivity)\b/);
+  add('network discovery', 'security_perform_network_discovery', /\b(network discovery|network enumeration|host enumeration|live hosts?|open ports?|service detection|smb|nfs|media services?)\b/);
+  add('network topology', 'security_analyze_network_topology', /\b(network topology|topology|vlans?|lldp|cdp|client isolation|routing relationships?|access points?|switches?)\b/);
+  add('wireless environment', 'security_analyze_wireless_environment', /\b(wireless environment|wireless assessment|wi fi|wifi|ssid|bssid|signal strength|channels?|channel overlap|security modes?)\b/);
+  return stages;
+}
+
+function parseStructuredResultObject(result) {
+  for (const block of result?.content ?? []) {
+    if (block?.type !== 'text' || typeof block.text !== 'string') continue;
+    let raw = block.text.trim();
+    if (raw.startsWith('structuredContent:\n')) raw = raw.slice('structuredContent:\n'.length).trim();
+    try {
+      let value = JSON.parse(raw);
+      if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 1 && Object.hasOwn(value, 'result')) {
+        value = value.result;
+        if (typeof value === 'string') {
+          try { value = JSON.parse(value); } catch { /* retain string */ }
+        }
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    } catch { /* not structured JSON */ }
+  }
+  return null;
+}
 export function repeatArgsEquivalent(schema, previousArgs, nextArgs) {
   const prev = previousArgs ?? {};
   const next = nextArgs ?? {};
@@ -275,6 +313,39 @@ export class BoundedGate {
     this.calls = 0;
     this.currentPrompt = String(prompt ?? '');
     this.successfulCallsThisTurn = new Map();
+    this.successfulResultsThisTurn = new Map();
+  }
+  latestSuccessfulResult(tool) {
+    const rows = this.successfulResultsThisTurn.get(tool) ?? [];
+    return rows.at(-1)?.result ?? null;
+  }
+  outstandingNetworkStages() {
+    return requestedNetworkWorkflowStages(this.currentPrompt).filter(({ tool }) => !this.latestSuccessfulResult(tool));
+  }
+  prepareNetworkMapArgs(args = {}) {
+    const missing = this.outstandingNetworkStages();
+    if (missing.length) {
+      const labels = missing.map(x => x.stage).join(', ');
+      const next = missing[0];
+      failure(`Network-map generation is blocked because requested workflow stages are still incomplete: ${labels}. Complete ${next.stage} first using ${this.grants.has(next.tool) ? `mcp_call with ${next.tool}` : `a dedicated mcp_search on server=\"security\" followed by the matching call`}. Do not substitute host/discovery data for a dedicated wireless or topology assessment.`);
+    }
+
+    const aggregated = {};
+    for (const [tool, key] of Object.entries(NETWORK_RECON_RESULT_KEYS)) {
+      const result = this.latestSuccessfulResult(tool);
+      if (result) aggregated[key] = result;
+    }
+    const supplied = args.data && typeof args.data === 'object' && !Array.isArray(args.data) ? args.data : {};
+    const directData = { ...supplied, ...aggregated };
+    if (!Object.keys(directData).length) {
+      if (args.input_path) {
+        failure('Do not pass a native Pi workspace path to security_generate_graphical_network_map: Pi and mcp-security use different workspaces. Pass aggregated recon results directly in args.data, or run the recon stages in this user turn so the bounded gate can inject them automatically.');
+      }
+      failure('No structured reconnaissance data is available for the network map. Run the requested host/discovery/topology/wireless stages first, then call the map tool.');
+    }
+    const next = { ...args, data: directData };
+    delete next.input_path;
+    return next;
   }
   enabled(server) {
     return Object.hasOwn(this.config.mcpServers ?? {}, server) && this.config.mcpServers[server].disabled !== true;
@@ -480,6 +551,8 @@ export class BoundedGate {
     const server = this.grants.get(tool);
     if (!server) failure(`Tool not discovered in this conversation (or evicted from the ${LIMITS.grants}-tool cache). Run mcp_search for the requested capability, then retry mcp_call with an exact returned name. Pass empty arguments separately as args: {}; never append {} to the tool name. This is a discovery requirement, not a target or service failure.`);
 
+    if (tool === NETWORK_MAP_TOOL) args = this.prepareNetworkMapArgs(args);
+
     const schema = this.grantSchemas.get(tool);
     const meta = this.grantMeta.get(tool) ?? {};
     const successes = this.successfulCallsThisTurn.get(tool) ?? [];
@@ -514,6 +587,12 @@ export class BoundedGate {
     const successList = this.successfulCallsThisTurn.get(tool) ?? [];
     successList.push({ args: structuredClone(args), at: Date.now() });
     this.successfulCallsThisTurn.set(tool, successList.slice(-8));
+    const structuredResult = parseStructuredResultObject(result);
+    if (structuredResult) {
+      const rows = this.successfulResultsThisTurn.get(tool) ?? [];
+      rows.push({ result: structuredClone(structuredResult), at: Date.now() });
+      this.successfulResultsThisTurn.set(tool, rows.slice(-4));
+    }
     // The adapter's output guard preserves large results in a local spill file.
     // Do not duplicate its bounded raw MCP details into the model context.
     return { content: dedupeContent(result.content), details: { server, tool, ...(result.details?.outputGuard ? { outputGuard: result.details.outputGuard } : {}) } };

@@ -22,20 +22,19 @@ test('system prompt enforces multi-step completion and evidence grounding', asyn
   assert.match(prompt, /HE\/NSS\/GI are PHY fields/i);
   assert.match(prompt, /runtime blocks that no-progress loop/i);
   assert.match(prompt, /emit the tool call immediately/i);
+  assert.match(prompt, /dedicated wireless search\/call/i);
+  assert.match(prompt, /different workspaces/i);
+  assert.match(prompt, /direct `data`/i);
 });
 
-test('published Web UI allowlist preserves restrictive presets and blocks optional reactivation', { skip: !webPackage }, async () => {
-  const { applyAgentToolsGating, setAgentToolEnabled, defaultDisabledAgentTools, AGENT_TOOL_CATALOG, filterToolsByPreset } = await import(pathToFileURL(path.join(webPackage, 'dist/server/tool-manager.js')));
-  let active = [...ALLOWED_TOOLS, 'browser_page', 'searxng_search', 'mcpScript'];
-  const session = { getAllTools: () => active.map(name => ({ name })), getActiveToolNames: () => active, setActiveToolsByName: names => { active = names; } };
-  applyAgentToolsGating(session, []);
-  assert.deepEqual([...active].sort(), [...ALLOWED_TOOLS].sort());
-  setAgentToolEnabled(session, 'browser_page', true);
-  assert.ok(!active.includes('browser_page'));
-  assert.equal(defaultDisabledAgentTools().length, AGENT_TOOL_CATALOG.length);
-  assert.deepEqual(filterToolsByPreset(ALLOWED_TOOLS, 'ask'), []);
-  assert.deepEqual(filterToolsByPreset(ALLOWED_TOOLS, 'minimal').sort(), ['bash', 'read']);
+test('image pins upstream Pi with actionable settle boundary and does not patch pi-web-ui source', async () => {
+  const dockerfile = await fs.readFile(fileURLToPath(new URL('../../../Dockerfile', import.meta.url)), 'utf8');
+  assert.match(dockerfile, /ARG PI_VERSION=1\.0\.0/);
+  assert.match(dockerfile, /ARG PI_WEB_UI_VERSION=0\.97\.0/);
+  assert.doesNotMatch(dockerfile, /patch-web-tool-policy/);
+  assert.match(dockerfile, /verify-pi-runtime\.mjs/);
 });
+
 test('migration preserves model/permission settings and sessions, disables installed extras, and is idempotent', { skip: !webPackage }, async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-policy-'));
   const agent = path.join(dir, 'agent');

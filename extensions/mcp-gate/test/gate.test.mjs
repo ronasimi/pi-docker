@@ -389,3 +389,92 @@ test('gateway operations serialize and recover after an execution failure', asyn
   await second;
   assert.deepEqual(order, [1, 2, 3]);
 });
+
+test('network map waits for explicitly requested recon stages and injects exact prior results as direct data', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const descriptions = {
+    security_get_host_interface_info: 'Host network state inventory.',
+    security_perform_network_discovery: 'Read-only comprehensive network discovery.',
+    security_analyze_network_topology: 'Analyze network topology.',
+    security_analyze_wireless_environment: 'Passive wireless environment assessment.',
+    security_generate_graphical_network_map: 'Generate graphical network map.',
+  };
+  const schemas = Object.fromEntries(Object.keys(descriptions).map(name => [name, {
+    type: 'object', properties: {}, required: [], additionalProperties: true,
+  }]));
+  const byQuery = query => {
+    const q = String(query).toLowerCase();
+    if (q.includes('host')) return 'security_get_host_interface_info';
+    if (q.includes('discovery')) return 'security_perform_network_discovery';
+    if (q.includes('topology')) return 'security_analyze_network_topology';
+    if (q.includes('wireless')) return 'security_analyze_wireless_environment';
+    return 'security_generate_graphical_network_map';
+  };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) {
+      const tool = byQuery(params.search);
+      return { details: { matches: [{ server: 'security', tool }], hasMore: false, nextOffset: null } };
+    }
+    if (params.describe) return { details: { tool: { description: descriptions[params.describe], inputSchema: schemas[params.describe] } } };
+    const resultByTool = {
+      security_get_host_interface_info: { selected_interface: 'wlp3s0', connection_type: 'wifi' },
+      security_perform_network_discovery: { cidrs: ['192.168.1.0/24'], hosts: [{ address: '192.168.1.1' }] },
+      security_analyze_network_topology: { local_subnets: ['192.168.1.0/24'] },
+      security_analyze_wireless_environment: { interface: 'wlp3s0', current_connection: { ssid: 'test' } },
+      security_generate_graphical_network_map: { outputs: { svg: '.security-results/network-map.svg' }, complete: true },
+    };
+    return { content: [{ type: 'text', text: JSON.stringify(resultByTool[params.tool]) }], details: {} };
+  });
+
+  gate.beginTurn('Collect HOST NETWORK STATE, NETWORK DISCOVERY, NETWORK TOPOLOGY, WIRELESS ENVIRONMENT and generate a GRAPHICAL NETWORK MAP.');
+  for (const [query, tool] of [
+    ['host network state', 'security_get_host_interface_info'],
+    ['network discovery', 'security_perform_network_discovery'],
+    ['network topology', 'security_analyze_network_topology'],
+    ['wireless environment assessment', 'security_analyze_wireless_environment'],
+    ['graphical network map', 'security_generate_graphical_network_map'],
+  ]) {
+    await gate.search({ query, server: 'security', limit: 1 });
+    assert.ok(gate.grants.has(tool));
+  }
+
+  await gate.call({ tool: 'security_get_host_interface_info', args: {} });
+  await gate.call({ tool: 'security_perform_network_discovery', args: {} });
+  await gate.call({ tool: 'security_analyze_network_topology', args: {} });
+  await assert.rejects(
+    gate.call({ tool: 'security_generate_graphical_network_map', args: { input_path: 'network_data.json', format: 'both' } }),
+    /wireless environment/i,
+  );
+
+  await gate.call({ tool: 'security_analyze_wireless_environment', args: {} });
+  await gate.call({ tool: 'security_generate_graphical_network_map', args: { input_path: 'network_data.json', data: {}, format: 'both' } });
+  const mapCall = calls.filter(c => c.tool === 'security_generate_graphical_network_map').at(-1);
+  assert.equal(mapCall.args.input_path, undefined, 'native Pi workspace path must never be forwarded to mcp-security');
+  assert.equal(mapCall.args.format, 'both');
+  assert.equal(mapCall.args.data.get_host_interface_info.selected_interface, 'wlp3s0');
+  assert.equal(mapCall.args.data.perform_network_discovery.hosts[0].address, '192.168.1.1');
+  assert.deepEqual(mapCall.args.data.analyze_network_topology.local_subnets, ['192.168.1.0/24']);
+  assert.equal(mapCall.args.data.analyze_wireless_environment.current_connection.ssid, 'test');
+});
+
+test('network map rejects a native Pi input_path when no direct recon data exists', async () => {
+  const calls = [];
+  const config = { mcpServers: { security: {} } };
+  const gate = new BoundedGate(config, async params => {
+    calls.push(params);
+    if (params.connect) return { details: {} };
+    if ('search' in params) return { details: { matches: [{ server: 'security', tool: 'security_generate_graphical_network_map' }], hasMore: false, nextOffset: null } };
+    if (params.describe) return { details: { tool: { description: 'Generate graphical network map.', inputSchema: { type: 'object', properties: { data: { type: 'object' }, input_path: { type: 'string' } }, required: [], additionalProperties: false } } } };
+    return { content: [{ type: 'text', text: '{}' }], details: {} };
+  });
+  gate.beginTurn('Generate a graphical network map from my existing results.');
+  await gate.search({ query: 'graphical network map', server: 'security', limit: 1 });
+  await assert.rejects(
+    gate.call({ tool: 'security_generate_graphical_network_map', args: { input_path: 'network_data.json' } }),
+    /different workspaces/i,
+  );
+  assert.equal(calls.filter(c => c.tool).length, 0);
+});

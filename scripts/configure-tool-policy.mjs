@@ -25,7 +25,7 @@ update(path.join(agentDir, 'settings.json'), settings => {
   settings.extensions = ['-builtin:mcp', '-builtin:codemode', '-builtin:tool-search', '-builtin:llama.cpp', extension];
 });
 update(path.join(webDir, 'client-state.json'), state => {
-  // Settings are global in 0.96.1, but also migrate older per-client records and presets.
+  // Keep the current global settings plus older per-client records/presets aligned.
   state.__settings__ ??= { projects: [] };
   for (const value of Object.values(state)) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;

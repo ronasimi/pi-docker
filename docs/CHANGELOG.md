@@ -1,3 +1,13 @@
+# 2026-10-02 — Upstream Pi 1.0 runtime and direct network-map handoff
+- Raise the default runtime pins to `@earendil-works/pi-coding-agent` 1.0.0 and `pi-web-ui` 0.97.0 so the actionable `agent_before_settle` boundary used by the one-shot continuation guard is present.
+- Add a build-time runtime verifier that checks the global/nested Pi versions match and that `agent_before_settle` exists.
+- Remove the build-time pi-web-ui source patch; bounded tool enforcement now lives in the Pi extension plus persisted Web UI disabled-tool settings, reducing upstream upgrade fragility.
+- Track exact structured results from successful host-state/discovery/topology/wireless MCP calls in the current user turn.
+- Block network-map generation until every explicitly requested prerequisite recon stage (including a dedicated wireless assessment) has completed.
+- Inject those exact results directly into `security_generate_graphical_network_map.args.data` and strip native Pi `input_path` values so cross-container workspace paths cannot fail or corrupt the map handoff.
+- Add `scripts/upgrade-upstream-runtime.sh` to raise stale `.env` pins, run focused regressions, rebuild Pi, and verify the runtime in-container.
+- Validation in this archive: 33 focused gate/runtime/policy tests passed, 1 environment-dependent migration test skipped.
+
 # 2026-10-02 — Runtime no-progress and thinking-only continuation guards
 - Fix the thinking-only `agent_before_settle` continuation guard: the pre-draft boundary normally reports `canContinue=false` when the current final role is assistant. The guard now appends its hidden custom message first and lets Pi recompute/validate continuation, so thinking-only stops actually receive the promised one-shot continuation.
 

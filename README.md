@@ -21,9 +21,16 @@ The model receives exactly these tools in the standard agent preset:
 
 All optional Pi Web UI tools are disabled, including `browser_page`, subagents, terminal helpers, skills, scheduling, and direct MCP tools. Installed optional Pi packages are retained but their extensions, skills, and prompts are disabled. The original settings are backed up. The Web UI remains available; this changes the model's tools.
 
-The MCP adapter runs behind the gate. Its generic `mcp`, scripting tool, and direct server tools are never registered into the model's tool list. The separate built-in Pi MCP/codemode/tool-search extensions are disabled to avoid duplicate surfaces. Web UI gating and a Pi execution hook also reject optional tools that another extension tries to expose.
+The MCP adapter runs behind the gate. Its generic `mcp`, scripting tool, and direct server tools are never registered into the model's tool list. The separate built-in Pi MCP/codemode/tool-search extensions are disabled to avoid duplicate surfaces. The bounded extension itself enforces the active-tool allowlist at session/turn boundaries, while Web UI settings disable optional tools. No pi-web-ui source patch is required.
 
 Existing restrictive agent/permission presets continue to apply. Use the standard agent preset for all six tools; an existing chat in an ask/minimal/code preset can intentionally expose fewer tools. A read-only permission preset is not changed by this update. MCP server permissions and approvals remain those of the adapter/server; discovery is a routing gate, not an authorization mechanism.
+
+
+### Network-map handoff
+
+For comprehensive network reconnaissance, the gate stores the exact structured results of successful host-state, discovery, topology, and wireless calls for the current user turn. If `security_generate_graphical_network_map` is called, the gate requires every explicitly requested earlier network stage to have completed, then injects the stored results into `args.data`. Any native Pi `input_path` is removed rather than forwarded across containers. This avoids the `network_data.json` workspace mismatch and prevents the model from manually retyping/corrupting scan results.
+
+If the user explicitly requests a wireless assessment, host-state Wi-Fi metadata does not satisfy that step: the dedicated `security_analyze_wireless_environment` capability must complete before map generation.
 
 ## MCP workflow
 
@@ -65,7 +72,7 @@ cd ~/Projects/pi-docker
 ./scripts/init.sh
 ```
 
-Open http://127.0.0.1:8787. The image pins Pi 0.99.1, Pi Web UI 0.96.1, and MCP adapter 4.0.0. The Web UI's bundled Pi SDK is pinned as well. Existing `.env` pins override Compose defaults; the bundled upgrade installer updates these two pins.
+Open http://127.0.0.1:8787. The image pins Pi 1.0.0, Pi Web UI 0.97.0, and MCP adapter 4.0.0. The Web UI's nested Pi SDK is pinned to the same Pi version. The build runs `scripts/verify-pi-runtime.mjs` and fails if `agent_before_settle` is unavailable or the nested/global Pi versions diverge. Existing `.env` pins override Compose defaults; run `./scripts/upgrade-upstream-runtime.sh` to raise old pins and rebuild safely.
 
 Dependencies are installed at image build time. Container startup only applies the settings migration and synchronizes Ollama models. Model discovery failures keep the last valid model catalog. Invalid settings JSON stops startup with an explicit error rather than silently starting the old tool surface.
 
@@ -105,7 +112,7 @@ npm ci --ignore-scripts
 npm test
 ```
 
-To also test the Web UI patch and state migration, set `PI_WEB_PACKAGE_DIR` to an installed Pi Web UI 0.96.1 directory after running `scripts/patch-web-tool-policy.mjs` against it. The image applies that patch during build and fails if upstream source no longer matches.
+To test the Web UI state migration against an installed package, set `PI_WEB_PACKAGE_DIR` to a Pi Web UI 0.97.x directory and run the policy tests. The image no longer patches pi-web-ui source; bounded tool enforcement stays in the Pi extension plus persisted Web UI disabled-tool settings.
 
 Start a **new chat** and ask:
 

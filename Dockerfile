@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim
 
-ARG PI_VERSION=0.99.1
-ARG PI_WEB_UI_VERSION=0.96.1
+ARG PI_VERSION=1.0.0
+ARG PI_WEB_UI_VERSION=0.97.0
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -26,11 +26,11 @@ RUN set -eux; \
 
 COPY --chown=pi:pi scripts/container-entrypoint.sh /usr/local/bin/pi-container-entrypoint
 COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-ollama-models.mjs
-COPY scripts/patch-web-tool-policy.mjs scripts/configure-tool-policy.mjs /usr/local/lib/pi-docker/
+COPY scripts/configure-tool-policy.mjs scripts/verify-pi-runtime.mjs /usr/local/lib/pi-docker/
 COPY extensions/mcp-gate/package*.json /opt/pi-mcp-gate/
 RUN cd /opt/pi-mcp-gate && npm ci --ignore-scripts --omit=dev --no-audit --no-fund
 COPY extensions/mcp-gate/index.ts extensions/mcp-gate/gate.mjs extensions/mcp-gate/reasoning.mjs extensions/mcp-gate/runtime-guards.mjs /opt/pi-mcp-gate/
-RUN node /usr/local/lib/pi-docker/patch-web-tool-policy.mjs /usr/local/lib/node_modules/pi-web-ui
+RUN node /usr/local/lib/pi-docker/verify-pi-runtime.mjs
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
 USER pi
