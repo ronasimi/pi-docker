@@ -1,4 +1,4 @@
-export const THINKING_CONTINUATION_MESSAGE = 'Continue from your previous reasoning. If you intended to call a tool, emit that tool call now. Otherwise provide the final answer. Do not repeat completed MCP calls. For a multi-step MCP request, continue with the next outstanding capability and search for that capability if needed.';
+export const THINKING_CONTINUATION_MESSAGE = 'Continue from your previous reasoning. If you intended to call a tool, emit that tool call now. Otherwise continue the workflow. Do not repeat completed MCP calls. Before finalizing a multi-step MCP request, review the original user request and ensure every explicitly requested capability has either a successful relevant tool call or its own exhausted mcp_search. Search any still-outstanding capability separately; do not skip earlier requested steps.';
 
 function blocksOf(message) {
   if (!message) return [];
@@ -46,7 +46,13 @@ export function lastAssistant(messages = []) {
 }
 
 export function thinkingOnlyBoundaryResult(event, alreadyUsed = false) {
-  if (alreadyUsed || event?.outcome !== 'completed' || event?.context?.canContinue === false) return undefined;
+  // Do not gate on the incoming boundary context's canContinue flag. At
+  // agent_before_settle an ordinary completed assistant response naturally
+  // ends with role=assistant, so Pi reports canContinue=false *before* our
+  // draft is applied. The hidden custom_message below is converted to a user
+  // message; Pi then rebuilds the boundary context and validates continuation.
+  // Rejecting the pre-draft false value prevents this guard from ever firing.
+  if (alreadyUsed || event?.outcome !== 'completed') return undefined;
   const messages = event?.context?.contextMessages ?? event?.context?.llmMessages ?? [];
   const message = lastAssistant(messages);
   if (!isThinkingOnlyAssistant(message)) return undefined;

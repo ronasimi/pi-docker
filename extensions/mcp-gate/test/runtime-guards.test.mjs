@@ -19,7 +19,7 @@ test('thinking-only settlement injects one hidden continuation message', () => {
   const event = {
     outcome: 'completed',
     entries: [],
-    context: { canContinue: true, contextMessages: [{ role: 'user', content: [{ type: 'text', text: 'make a map' }] }, thinking()] },
+    context: { canContinue: false, contextMessages: [{ role: 'user', content: [{ type: 'text', text: 'make a map' }] }, thinking()] },
   };
   const result = thinkingOnlyBoundaryResult(event, false);
   assert.equal(result.continue, true);
@@ -27,11 +27,12 @@ test('thinking-only settlement injects one hidden continuation message', () => {
   assert.equal(result.entries[0].type, 'custom_message');
   assert.equal(result.entries[0].display, false);
   assert.equal(result.entries[0].content, THINKING_CONTINUATION_MESSAGE);
+  assert.equal(event.context.canContinue, false, 'pre-draft boundary is expected to be non-continuable when the last role is assistant');
   assert.equal(thinkingOnlyBoundaryResult(event, true), undefined, 'automatic continuation is capped at one per agent run');
 });
 
 test('does not continue aborted/error or ordinary completed answers', () => {
-  const base = { entries: [], context: { canContinue: true, contextMessages: [thinking()] } };
+  const base = { entries: [], context: { canContinue: false, contextMessages: [thinking()] } };
   assert.equal(thinkingOnlyBoundaryResult({ ...base, outcome: 'aborted' }, false), undefined);
   assert.equal(thinkingOnlyBoundaryResult({ ...base, outcome: 'error' }, false), undefined);
   assert.equal(thinkingOnlyBoundaryResult({ outcome: 'completed', entries: [], context: { canContinue: true, contextMessages: [{ role: 'assistant', content: [{ type: 'text', text: 'final' }], stopReason: 'stop' }] } }, false), undefined);

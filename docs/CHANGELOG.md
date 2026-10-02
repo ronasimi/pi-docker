@@ -1,4 +1,5 @@
 # 2026-10-02 — Runtime no-progress and thinking-only continuation guards
+- Fix the thinking-only `agent_before_settle` continuation guard: the pre-draft boundary normally reports `canContinue=false` when the current final role is assistant. The guard now appends its hidden custom message first and lets Pi recompute/validate continuation, so thinking-only stops actually receive the promised one-shot continuation.
 
 - Block repeated successful **read-only** MCP calls with equivalent arguments inside one user turn. All-optional tools also treat an immediate empty/default replay after a successful explicit call as equivalent, preventing expensive operations such as network discovery from running twice.
 - Keep status/health/poll-style tools repeatable and allow fresh reruns when the user explicitly asks to rerun/recheck/refresh/repeat the operation. Failed calls are still retryable and are never auto-replayed.
