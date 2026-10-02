@@ -1135,6 +1135,8 @@
         "security_network_interfaces": [
           "security interfaces",
           "capture interfaces",
+          "network interfaces",
+          "routes",
           "security container interfaces",
           "container routes",
           "security namespace",
@@ -1333,14 +1335,7 @@
           "aircrack airodump",
           "nearby access points",
           "wifi link speed",
-          "wireless environment",
-          "passive wireless assessment",
-          "wireless network assessment",
-          "wireless survey",
-          "spectrum survey",
-          "wifi spectrum survey",
-          "RF survey",
-          "radio frequency survey"
+          "wireless environment"
         ],
         "generate_graphical_network_map": [
           "network map",

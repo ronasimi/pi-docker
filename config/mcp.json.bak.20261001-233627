@@ -824,7 +824,7 @@
       "directTools": false,
       "exposeResources": false,
       "requestTimeoutMs": 330000,
-      "description": "Security MCP: authorized host/LAN/Wi-Fi reconnaissance and mapping, protocol discovery, vulnerability assessment, OSINT, log/PCAP/IDS, endpoint and binary forensics. Tools are discovered through bounded MCP search.",
+      "description": "Security CLI suite: authorized reconnaissance, OSINT, SQL injection assessment, Metasploit modules and listeners, plus log/PCAP/IDS, endpoint and binary forensics. Tools are discovered through bounded MCP search.",
       "searchKeywords": {
         "security_network_discover": [
           "network discovery",
@@ -917,138 +917,6 @@
           "domain reconnaissance",
           "CAA"
         ],
-        "security_mdns_discover": [
-          "mDNS",
-          "DNS-SD",
-          "Bonjour",
-          "Zeroconf",
-          "multicast DNS",
-          "service discovery",
-          "discover mdns services"
-        ],
-        "security_upnp_discover": [
-          "UPnP",
-          "SSDP",
-          "UPnP discovery",
-          "DLNA discovery",
-          "IGD discovery",
-          "discover smart devices"
-        ],
-        "security_dhcp_discover": [
-          "DHCP",
-          "DHCP server",
-          "DHCP options",
-          "DHCP discovery",
-          "subnet mask router DNS",
-          "network lease configuration"
-        ],
-        "security_dhcp6_discover": [
-          "DHCPv6",
-          "DHCP6",
-          "IPv6 DHCP",
-          "DHCPv6 discovery",
-          "IPv6 network options"
-        ],
-        "security_dns_audit": [
-          "DNS audit",
-          "DNS recursion",
-          "DNSSEC",
-          "NSID",
-          "version.bind",
-          "zone transfer",
-          "AXFR",
-          "DNS server security"
-        ],
-        "security_snmp_discover": [
-          "SNMP",
-          "SNMP discovery",
-          "SNMP system info",
-          "SNMP engine",
-          "UDP 161",
-          "network management"
-        ],
-        "security_snmp_interfaces": [
-          "SNMP interfaces",
-          "SNMP interface table",
-          "SNMP network interfaces",
-          "interface counters",
-          "ifTable"
-        ],
-        "security_smb_audit": [
-          "SMB audit",
-          "SMB dialects",
-          "SMB signing",
-          "SMBv1",
-          "SMBv2",
-          "SMBv3",
-          "Windows file sharing security"
-        ],
-        "security_smb_shares": [
-          "SMB shares",
-          "enumerate shares",
-          "anonymous SMB",
-          "Windows shares",
-          "Samba shares"
-        ],
-        "security_ntp_discover": [
-          "NTP",
-          "NTP server",
-          "NTP stratum",
-          "time server",
-          "UDP 123",
-          "NTP discovery"
-        ],
-        "security_ldap_discover": [
-          "LDAP",
-          "RootDSE",
-          "LDAP discovery",
-          "Active Directory naming contexts",
-          "LDAP capabilities",
-          "LDAP SASL"
-        ],
-        "security_lldp_observe": [
-          "LLDP",
-          "link layer discovery",
-          "switch neighbor",
-          "LLDP neighbors",
-          "network topology"
-        ],
-        "security_cdp_observe": [
-          "CDP",
-          "Cisco Discovery Protocol",
-          "Cisco neighbor",
-          "switch topology",
-          "Cisco discovery"
-        ],
-        "security_llmnr_nbns_observe": [
-          "LLMNR",
-          "NBNS",
-          "NetBIOS name service",
-          "local name resolution",
-          "passive name resolution traffic"
-        ],
-        "security_wsd_discover": [
-          "WS-Discovery",
-          "WSD",
-          "Windows discovery",
-          "printer discovery",
-          "WCF discovery",
-          "UDP 3702"
-        ],
-        "security_arp_discover": [
-          "ARP discovery",
-          "ARP scan",
-          "MAC address discovery",
-          "layer 2 host discovery",
-          "LAN ARP"
-        ],
-        "security_ndp_discover": [
-          "NDP",
-          "IPv6 neighbors",
-          "neighbor discovery protocol",
-          "IPv6 neighbor cache",
-          "IPv6 LAN discovery"
-        ],
         "security_workspace_vuln_scan": [
           "Trivy",
           "dependency vulnerabilities",
@@ -1135,6 +1003,8 @@
         "security_network_interfaces": [
           "security interfaces",
           "capture interfaces",
+          "network interfaces",
+          "routes",
           "security container interfaces",
           "container routes",
           "security namespace",
@@ -1283,75 +1153,6 @@
           "opcodes",
           "reverse engineering",
           "malware functions"
-        ],
-        "get_host_interface_info": [
-          "host interface info",
-          "active network interface",
-          "ethernet or wifi",
-          "default gateway",
-          "local IP address",
-          "internet connectivity",
-          "network state",
-          "current network connection",
-          "host network interfaces"
-        ],
-        "perform_network_discovery": [
-          "comprehensive network discovery",
-          "enumerate local network",
-          "discover and scan hosts",
-          "network inventory",
-          "LAN reconnaissance",
-          "OS fingerprint hosts",
-          "scan ports and services",
-          "find SMB shares",
-          "find NFS shares",
-          "find media servers",
-          "Plex DLNA discovery",
-          "new network assessment"
-        ],
-        "analyze_network_topology": [
-          "network topology",
-          "detect VLANs",
-          "multiple subnets",
-          "client isolation",
-          "AP isolation",
-          "mdns reflector",
-          "mdns repeater",
-          "network structure",
-          "gateway topology",
-          "LLDP CDP topology"
-        ],
-        "analyze_wireless_environment": [
-          "wireless analysis",
-          "wifi analysis",
-          "wifi congestion",
-          "channel overlap",
-          "signal strength",
-          "wifi security",
-          "802.11ax",
-          "802.11ac",
-          "aircrack airodump",
-          "nearby access points",
-          "wifi link speed",
-          "wireless environment",
-          "passive wireless assessment",
-          "wireless network assessment",
-          "wireless survey",
-          "spectrum survey",
-          "wifi spectrum survey",
-          "RF survey",
-          "radio frequency survey"
-        ],
-        "generate_graphical_network_map": [
-          "network map",
-          "graph network",
-          "graphical network map",
-          "visualize network",
-          "network topology diagram",
-          "Graphviz network",
-          "SVG network map",
-          "network diagram",
-          "map discovered hosts"
         ]
       },
       "lifecycle": "lazy"
