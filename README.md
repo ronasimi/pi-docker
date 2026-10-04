@@ -107,6 +107,10 @@ After installing the pinned upstream packages in an isolated directory, run:
 node tests/native-mcp-smoke.mjs /path/to/pi-coding-agent /path/to/pi-web-ui /path/to/mcp-gateway
 ```
 
-Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that their 142 tools remain deferred, verifies native discovery of the daily briefing/wireless/unread-email tools, and replays the actual Web UI settings function. It makes no model requests or network scans.
+Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that their 132 tools remain deferred, checks 18 intent queries, every canonical tool name, and the failed run’s exact discovery query, and replays the actual Web UI settings function. It makes no model requests or network scans.
 
 The Web UI compatibility adjustment is pinned to 0.97.0. A different source hash stops the build for review; it never silently applies to another release. Pi remains the official 1.0.0 package.
+
+## 2026-10-04 recon completion update
+
+Topology preserves partial results when capture is unavailable. Wireless units are explicit. Host observation artifacts feed map input_paths directly. Pi builds now verify the ESM SDK import before deployment. See the bundle RECON-COMPLETION-FIXES.md for validation and limits.

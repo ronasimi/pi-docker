@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const webRoot = '/usr/local/lib/node_modules/pi-web-ui';
-// Pi exposes an import-only entry; CommonJS require.resolve rejects it.
-const sdkEntry = path.join(webRoot, 'node_modules/@earendil-works/pi-coding-agent/dist/index.js');
+const webRequire = createRequire(path.join(webRoot, 'package.json'));
+const sdkEntry = webRequire.resolve('@earendil-works/pi-coding-agent');
 const sdkRoot = path.dirname(path.dirname(sdkEntry));
 const read = p => JSON.parse(fs.readFileSync(p, 'utf8'));
 assert.equal(read('/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/package.json').version, '1.0.0');
@@ -14,10 +15,6 @@ assert.equal(read(path.join(sdkRoot, 'package.json')).version, '1.0.0');
 assert.equal(read(path.join(webRoot, 'package.json')).version, '0.97.0');
 const sdk = await import(pathToFileURL(sdkEntry));
 for (const name of ['createMcpExtension', 'createToolSearchExtension']) assert.equal(typeof sdk[name], 'function');
-if (process.argv.includes('--sdk-only')) {
-  console.log('Verified Pi ESM SDK imports and pinned versions.');
-  process.exit(0);
-}
 const agentDir = process.env.PI_CODING_AGENT_DIR || '/home/pi/.pi/agent';
 const webDir = process.env.PI_WEB_DATA_DIR || '/home/pi/.pi-web';
 const settings = read(path.join(agentDir, 'settings.json'));

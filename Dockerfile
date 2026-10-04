@@ -32,6 +32,7 @@ COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-
 COPY --chown=pi:pi config/settings.json /etc/pi/default-settings.json
 COPY --chown=pi:pi config/web-settings.json /etc/pi/default-web-settings.json
 COPY --chown=pi:pi scripts/verify-stock-runtime.mjs /usr/local/lib/pi-docker/verify-stock-runtime.mjs
+RUN node /usr/local/lib/pi-docker/verify-stock-runtime.mjs --sdk-only
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
 USER pi

@@ -1,3 +1,11 @@
+## 2026-10-03 — deduplicated native MCP catalog
+
+- Use concise namespace summaries and normalize tool exposure rules for the revised catalog.
+- Retain positive domain routing; improve specific discovery, recovery and evidence guidance.
+- Hide shared-context browser_close by default; use browser_tabs close.
+- Test all 132 canonical names and 18 intent queries with stock Pi, including the failed run query.
+- Pi 1.0.0 and the existing Web UI integration remain unchanged.
+
 # Changelog
 
 ## 2026-10-03 — Stock Pi 1.0 migration
@@ -39,7 +47,7 @@
 - Require schema-fit validation and continuation on `hasMore/nextOffset` before refining a search or concluding that a capability is missing.
 - Down-weight one-token entity aliases in longer capability queries so `clients on router anansi` ranks `openwrt_clients` ahead of generic router status while `check anansi router status` still ranks status first.
 - Synchronize the Pi catalog with the gateway's per-tool System/Google/Security aliases, removing broad wildcard aliases while preserving Pi-specific transport timeouts and restrictions.
-- Clarify that `security_network_interfaces` is the security-container namespace only; authorized LAN enumeration uses `security_network_discover` with the actual target CIDR.
+- Clarify that `network_interfaces` is the security-container namespace only; authorized LAN enumeration uses `network_discover` with the actual target CIDR.
 - Add regressions for omitted security routing, multi-page discovery continuation, exact Anansi client ranking, and security network scope.
 - Validation in this archive: 20 runnable gate tests passed (2 policy tests skipped by environment guards) and all 14 security-gateway tests passed.
 
