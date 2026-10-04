@@ -57,9 +57,7 @@ echo '== MCP-first routing prompt =='
 docker compose exec -T pi bash -lc 'test -r "$PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" && echo "APPEND_SYSTEM.md loaded from $PI_CODING_AGENT_DIR/APPEND_SYSTEM.md" || echo "APPEND_SYSTEM.md missing"' || true
 
 echo
-echo '== MCP routing configuration =='
-docker compose exec -T pi jq -r '.mcpServers | to_entries[] | "\(.key): directTools=\(.value.directTools) url=\(.value.url)"' /etc/pi/mcp.json 2>/dev/null || true
-echo 'Expected standard tool set: read, write, edit, bash, mcp_search, mcp_call'
+echo '== Native MCP configuration =='
+docker compose exec -T pi jq -r '.mcpServers | to_entries[] | "\(.key): exposure=\(.value.exposure // "codemode") url=\(.value.url // "stdio")"' /home/pi/.pi/agent/mcp.json 2>/dev/null || true
+echo 'Expected startup tools: read, bash, edit, write, tool_search'
 docker compose exec -T pi jq '{defaultTools, extensions}' /home/pi/.pi/agent/settings.json 2>/dev/null || true
-echo 'Optional Web UI tools disabled:'
-docker compose exec -T pi jq '.__settings__.settings.disabledAgentTools' /home/pi/.pi-web/client-state.json 2>/dev/null || true

@@ -32,7 +32,6 @@ services:
       PI_OLLAMA_MAX_TOKENS: ${PI_OLLAMA_MAX_TOKENS:-4096}
       PI_OLLAMA_DISCOVERY_RETRY_SECONDS: ${PI_OLLAMA_DISCOVERY_RETRY_SECONDS:-30}
       PI_OLLAMA_HIDE_ALIAS_SOURCES: ${PI_OLLAMA_HIDE_ALIAS_SOURCES:-true}
-      PI_MCP_CONFIG: /etc/pi/mcp.json
       PI_WEB_MANAGED: "1"
 
     volumes:
@@ -43,7 +42,7 @@ services:
       # Keep only small version-controlled per-model overrides here.
       - ./config/models-overrides.json:/etc/pi/models-overrides.json:ro
       - ./config/models-fallback.json:/etc/pi/models-fallback.json:ro
-      - ./config/mcp.json:/etc/pi/mcp.json:ro
+      - ./config/mcp.json:/home/pi/.pi/agent/mcp.json:ro
       - ./config/APPEND_SYSTEM.md:/home/pi/.pi/agent/APPEND_SYSTEM.md:ro
       # Let Pi work directly on the host Projects tree.
       - ${HOME}/Projects:/workspace

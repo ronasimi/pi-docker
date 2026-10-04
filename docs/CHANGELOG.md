@@ -1,27 +1,13 @@
-# 2026-10-02 — MCP workflow ledger v12
+# Changelog
 
-- Recover small-model `mcp_search` batches by executing only the first `queries[]` entry and returning the remaining entries as deferred, never as a batched discovery request.
-- Prefer the high-level Security MCP reconnaissance tools for comprehensive host-state/discovery/topology/wireless/map queries, while keeping lower-level primitives available for narrower tasks.
-- Add runtime network-workflow completion tracking and `agent_before_settle` continuation so an explicit multi-stage assessment cannot silently finalize with requested stages still outstanding.
-- Mark dedicated exhausted searches as concrete capability limitations so workflows can finish honestly when a capability is genuinely unavailable.
-- Add per-tool workflow guidance after successful calls and sync the current Security discovery aliases into the Pi MCP config.
+## 2026-10-03 — Stock Pi 1.0 migration
 
-# 2026-10-02 — Small-model mcp_search query alias compatibility
-
-- Keep singular `query` as the canonical `mcp_search` argument while accepting the observed Gemma 4 E2B serialization variant `queries: ["capability"]` at the native Pi tool-schema boundary.
-- Normalize the compatibility alias into one bounded capability search before execution. V12 extends this recovery to multi-item `queries[]` by executing only the first entry and deferring the rest rather than batching them.
-- Preserve one-capability query semantics, search budgets, server routing, pagination, grant handling, and schema-fit requirements.
-- Add unit regressions for alias normalization and end-to-end bounded-gate execution of the malformed call shape observed in the attached session.
-
-# 2026-10-02 — Upstream Pi 1.0 runtime and direct network-map handoff
-- Raise the default runtime pins to `@earendil-works/pi-coding-agent` 1.0.0 and `pi-web-ui` 0.97.0 so the actionable `agent_before_settle` boundary used by the one-shot continuation guard is present.
-- Add a build-time runtime verifier that checks the global/nested Pi versions match and that `agent_before_settle` exists.
-- Remove the build-time pi-web-ui source patch; bounded tool enforcement now lives in the Pi extension plus persisted Web UI disabled-tool settings, reducing upstream upgrade fragility.
-- Track exact structured results from successful host-state/discovery/topology/wireless MCP calls in the current user turn.
-- Block network-map generation until every explicitly requested prerequisite recon stage (including a dedicated wireless assessment) has completed.
-- Inject those exact results directly into `security_generate_graphical_network_map.args.data` and strip native Pi `input_path` values so cross-container workspace paths cannot fail or corrupt the map handoff.
-- Add `scripts/upgrade-upstream-runtime.sh` to raise stale `.env` pins, run focused regressions, rebuild Pi, and verify the runtime in-container.
-- Validation in this archive: 33 focused gate/runtime/policy tests passed, 1 environment-dependent migration test skipped.
+- Upgrade the runtime to official `@earendil-works/pi-coding-agent` 1.0.0 and `pi-web-ui` 0.97.0.
+- Remove the custom bounded MCP gate, Pi-side MCP adapter, old Web UI policy patch, workflow guards, custom discovery grants, and Pi-side ranking/recovery code.
+- Enable upstream `builtin:mcp` and `builtin:tool-search`; start with `read`, `bash`, `edit`, `write`, and `tool_search`.
+- Configure all existing MCP servers through native `mcp.json` with deferred exposure.
+- Replace the large procedural addendum with a compact positive-action prompt while retaining domain routing.
+- Preserve Docker service identity and bind-mounted Pi/Web UI state so sessions and settings survive the migration.
 
 # 2026-10-02 — Runtime no-progress and thinking-only continuation guards
 - Fix the thinking-only `agent_before_settle` continuation guard: the pre-draft boundary normally reports `canContinue=false` when the current final role is assistant. The guard now appends its hidden custom message first and lets Pi recompute/validate continuation, so thinking-only stops actually receive the promised one-shot continuation.

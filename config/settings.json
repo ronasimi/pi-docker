@@ -1,0 +1,5 @@
+{
+  "defaultTools": ["read", "bash", "edit", "write", "tool_search"],
+  "extensions": [],
+  "packages": []
+}

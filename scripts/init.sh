@@ -22,11 +22,11 @@ fi
 
 ./scripts/configure-ollama-64k.sh
 
-docker compose up -d --build
+./scripts/upgrade-stock-pi-1.0.sh
 
 echo
 echo "Pi Web UI: http://127.0.0.1:${PI_WEB_PORT:-8787}"
 echo "Ollama:    existing server at http://127.0.0.1:11434"
-echo "MCP:       bounded MCP services over ai-local"
+echo "MCP:       native deferred MCP services over ai-local"
 echo
 echo "Use ./scripts/status.sh to verify connectivity."

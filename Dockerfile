@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:22.20-bookworm-slim
 
 ARG PI_VERSION=1.0.0
 ARG PI_WEB_UI_VERSION=0.97.0
@@ -12,8 +12,11 @@ RUN apt-get update && \
     npm install --prefix /usr/local/lib/node_modules/pi-web-ui --ignore-scripts --omit=dev --no-save "@earendil-works/pi-coding-agent@${PI_VERSION}" && \
     rm -rf /root/.npm /var/lib/apt/lists/*
 
-# node:22-bookworm-slim already provides node:node at UID/GID 1000.
-# Reuse that account instead of trying to create a conflicting second 1000:1000 user.
+# Configure the official SDK factories in the Web UI, and retain deferred
+# activation on its settings reload. The Pi package is never patched.
+COPY scripts/configure-web-ui-native-mcp.mjs /usr/local/lib/pi-docker/configure-web-ui-native-mcp.mjs
+RUN node /usr/local/lib/pi-docker/configure-web-ui-native-mcp.mjs
+
 RUN set -eux; \
     test "$(id -u node)" = "1000"; \
     test "$(id -g node)" = "1000"; \
@@ -26,11 +29,9 @@ RUN set -eux; \
 
 COPY --chown=pi:pi scripts/container-entrypoint.sh /usr/local/bin/pi-container-entrypoint
 COPY --chown=pi:pi scripts/sync-ollama-models.mjs /usr/local/lib/pi-docker/sync-ollama-models.mjs
-COPY scripts/configure-tool-policy.mjs scripts/verify-pi-runtime.mjs /usr/local/lib/pi-docker/
-COPY extensions/mcp-gate/package*.json /opt/pi-mcp-gate/
-RUN cd /opt/pi-mcp-gate && npm ci --ignore-scripts --omit=dev --no-audit --no-fund
-COPY extensions/mcp-gate/index.ts extensions/mcp-gate/gate.mjs extensions/mcp-gate/reasoning.mjs extensions/mcp-gate/runtime-guards.mjs /opt/pi-mcp-gate/
-RUN node /usr/local/lib/pi-docker/verify-pi-runtime.mjs
+COPY --chown=pi:pi config/settings.json /etc/pi/default-settings.json
+COPY --chown=pi:pi config/web-settings.json /etc/pi/default-web-settings.json
+COPY --chown=pi:pi scripts/verify-stock-runtime.mjs /usr/local/lib/pi-docker/verify-stock-runtime.mjs
 RUN chmod 0755 /usr/local/bin/pi-container-entrypoint
 
 USER pi
