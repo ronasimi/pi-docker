@@ -75,10 +75,6 @@ Retain every successful `observation_path`, including partial results and discov
 
 6. **Completion check:** Before the report, verify each requested stage against its matching result. If a tool-backed step remains pending, search for and attempt it now. A plan, placeholder link, or statement that a tool exists is not a completed step. If blocked, identify the actual failing operation and preserve independent successful results. Say "Maps generated; assessment partial" when required evidence is missing or partial. Say "Assessment complete" only when every required collection stage is complete or genuinely not applicable and both requested map outputs exist.
 
-## mDNS subnet leads
-
-When asked to find other subnets from mDNS, search `discover_mdns_subnets` with `limit: 1` and call its exact returned tool using the observed physical interface. Retain its observation path. Report advertised addresses, candidate CIDRs, range_start/range_end, and basis. A heuristic /24 or /64 is a grouping hypothesis, not a discovered mask; a known route is routing coverage, not proof of a remote subnet boundary. Keep possible_reflection distinct from reflector_confirmed. Do not expand scans to advertised ranges without explicit scope authorization. The collector sends bounded DNS-SD queries; it does not scan hosts. IPv6-only multicast is not covered.
-
 ## Evidence rules
 
 - Use `current_connection.tx_bitrate` and `rx_bitrate` for negotiated rates. Nearby-AP `rate` is advertised data, not the laptop's negotiated link rate.

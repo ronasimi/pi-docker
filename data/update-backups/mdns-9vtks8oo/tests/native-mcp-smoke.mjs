@@ -37,10 +37,10 @@ try {
   ({session} = await sdk.createAgentSessionFromServices({services, sessionManager: sdk.SessionManager.inMemory(temp)}));
   await session.bindExtensions({});
   const deadline = Date.now() + 15000;
-  while (session.getAllTools().filter(t => t.name.startsWith('mcp__')).length < 138 && Date.now() < deadline) {
+  while (session.getAllTools().filter(t => t.name.startsWith('mcp__')).length < 132 && Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  assert.equal(session.getAllTools().filter(t => t.name.startsWith('mcp__')).length, 138, 'Every owned catalog must connect');
+  assert.equal(session.getAllTools().filter(t => t.name.startsWith('mcp__')).length, 132, 'Every owned catalog must connect');
   const disabled = [...AGENT_TOOL_CATALOG.map(t => t.name), 'powershell','ls','grep','find'];
   applyAgentToolsGating(session, disabled, 'standard');
   assert.deepEqual(session.getActiveToolNames().sort(), ['read','bash','edit','write','tool_search'].sort());
@@ -48,7 +48,6 @@ try {
   const startup=['read','bash','edit','write','tool_search'];
   const cases=[
     ['security MCP tools for network reconnaissance and mapping','security','get_host_interface_info'],
-    ['mDNS subnet discovery','security','discover_mdns_subnets'],
     ['host network state','security','get_host_interface_info'],
     ['comprehensive local network discovery','security','perform_network_discovery'],
     ['passive wireless assessment','security','analyze_wireless_environment'],
@@ -67,7 +66,6 @@ try {
     ['Drive download binary file','google','drive_download_file'],
     ['Google account authentication','google','auth_status'],
   ];
-  cases.push(['read PDF pages','system','pdf_read'],['merge PDF','system','pdf_write'],['office_read','system','office_read'],['edit Word Excel PowerPoint','system','office_edit'],['Office to PDF','system','office_export']);
   for(const [query,domain,name] of cases){
     session.setActiveToolsByName(startup);
     const expected=`mcp__${domain}__${name}`;
@@ -89,7 +87,7 @@ try {
   assert.deepEqual(broad.details.loaded,[
     'mcp__security__get_host_interface_info',
     'mcp__security__generate_graphical_network_map',
-    'mcp__security__analyze_wireless_environment',
+    'mcp__security__perform_network_discovery',
   ]);
   // Native discovery excludes already active tools: reuse loaded schemas, search only for missing steps.
   const followup=await search.execute('topology',{query:'analyze_network_topology',limit:1});
@@ -97,7 +95,7 @@ try {
   applyAgentToolsGating(session,disabled,'standard');
   assert.equal(session.getActiveToolNames().filter(t=>t.startsWith('mcp__')).length,4);
   for(const t of session.getAllTools())assert.doesNotMatch(t.name,/mcp__(security__security_|google__google_)/);
-  console.log(`Native SDK smoke passed: 138 deferred tools, five startup tools, ${cases.length} intent queries, 138 exact-name lookups, run-query replay and Web UI settings replay.`);
+  console.log(`Native SDK smoke passed: 132 deferred tools, five startup tools, ${cases.length} intent queries, 132 exact-name lookups, run-query replay and Web UI settings replay.`);
 
 } finally {
   if (session) await session.extensionRunner.emit({type: 'session_shutdown', reason: 'exit'});
