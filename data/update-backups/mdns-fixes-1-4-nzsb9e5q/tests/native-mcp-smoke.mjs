@@ -46,12 +46,6 @@ try {
   assert.deepEqual(session.getActiveToolNames().sort(), ['read','bash','edit','write','tool_search'].sort());
   const search = session.getToolDefinition('tool_search');
   const startup=['read','bash','edit','write','tool_search'];
-  // Regression: small local models frequently omit `limit`. Pi must load one
-  // schema by default rather than the upstream batch of eight.
-  session.setActiveToolsByName(startup);
-  const omittedLimit=await search.execute('default-limit',{query:'mDNS subnet discovery'});
-  assert.deepEqual(omittedLimit.details.loaded,['mcp__security__discover_mdns_subnets'],'Omitted tool_search.limit must default to one result');
-  session.setActiveToolsByName(startup);
   const cases=[
     ['security MCP tools for network reconnaissance and mapping','security','get_host_interface_info'],
     ['mDNS subnet discovery','security','discover_mdns_subnets'],
@@ -103,7 +97,7 @@ try {
   applyAgentToolsGating(session,disabled,'standard');
   assert.equal(session.getActiveToolNames().filter(t=>t.startsWith('mcp__')).length,4);
   for(const t of session.getAllTools())assert.doesNotMatch(t.name,/mcp__(security__security_|google__google_)/);
-  console.log(`Native SDK smoke passed: omitted limit loads one schema; 138 deferred tools, five startup tools, ${cases.length} intent queries, 138 exact-name lookups, explicit limit:3 replay and Web UI settings replay.`);
+  console.log(`Native SDK smoke passed: 138 deferred tools, five startup tools, ${cases.length} intent queries, 138 exact-name lookups, run-query replay and Web UI settings replay.`);
 
 } finally {
   if (session) await session.extensionRunner.emit({type: 'session_shutdown', reason: 'exit'});

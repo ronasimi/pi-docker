@@ -15,25 +15,11 @@ assert.equal(read(path.join(webRoot, 'package.json')).version, '0.97.0');
 const sdk = await import(pathToFileURL(sdkEntry));
 for (const name of ['createMcpExtension', 'createToolSearchExtension']) assert.equal(typeof sdk[name], 'function');
 if (process.argv.includes('--sdk-only')) {
-  console.log('Verified pinned Pi/Web UI versions and official Pi ESM SDK exports.');
+  console.log('Verified Pi ESM SDK imports and pinned versions.');
   process.exit(0);
 }
 const agentDir = process.env.PI_CODING_AGENT_DIR || '/home/pi/.pi/agent';
 const webDir = process.env.PI_WEB_DATA_DIR || '/home/pi/.pi-web';
-const guardPath = path.join(agentDir, 'extensions/tool-search-default-limit.js');
-assert(fs.existsSync(guardPath), 'Missing runtime tool_search default-limit guard');
-const guardModule = await import(pathToFileURL(guardPath));
-let toolCallGuard;
-guardModule.default({on(event, handler) { if (event === 'tool_call') toolCallGuard = handler; }});
-assert.equal(typeof toolCallGuard, 'function', 'Runtime tool_search guard did not register tool_call hook');
-const omitted = {toolName: 'tool_search', input: {query: 'get_host_interface_info'}};
-toolCallGuard(omitted);
-assert.equal(omitted.input.limit, 1, 'Runtime guard must set omitted tool_search.limit to 1');
-const explicit = {toolName: 'tool_search', input: {query: 'network assessment', limit: 3}};
-toolCallGuard(explicit);
-assert.equal(explicit.input.limit, 3, 'Runtime guard must preserve explicit tool_search.limit');
-const promptText = fs.readFileSync(path.join(agentDir, 'APPEND_SYSTEM.md'), 'utf8');
-assert(promptText.includes('# Skill and deferred-tool discipline'), 'Missing skill/tool discovery routing guard in APPEND_SYSTEM.md');
 const settings = read(path.join(agentDir, 'settings.json'));
 assert.deepEqual(settings.defaultTools, ['read', 'bash', 'edit', 'write', 'tool_search']);
 const web = read(path.join(webDir, 'client-state.json')).__settings__.settings;
@@ -45,4 +31,4 @@ for (const name of ['system', 'security', 'google', 'memory', 'playwright', 'sea
   assert.equal(mcp.mcpServers[name].exposure, 'deferred', `${name} must use native discovery`);
   assert(mcp.mcpServers[name].description, `${name} requires a server summary`);
 }
-console.log('Verified Pi 1.0.0, Web UI 0.97.0, SDK exports, runtime tool_search guard, skill routing prompt, startup tools and six deferred MCP domains.');
+console.log('Verified Pi 1.0.0, Web UI 0.97.0, SDK exports, startup tools and six deferred MCP domains.');

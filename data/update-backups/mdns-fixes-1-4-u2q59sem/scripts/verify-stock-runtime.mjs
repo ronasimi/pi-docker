@@ -14,8 +14,22 @@ assert.equal(read(path.join(sdkRoot, 'package.json')).version, '1.0.0');
 assert.equal(read(path.join(webRoot, 'package.json')).version, '0.97.0');
 const sdk = await import(pathToFileURL(sdkEntry));
 for (const name of ['createMcpExtension', 'createToolSearchExtension']) assert.equal(typeof sdk[name], 'function');
+function jsFiles(root) {
+  const out = [];
+  for (const entry of fs.readdirSync(root, {withFileTypes: true})) {
+    const file = path.join(root, entry.name);
+    if (entry.isDirectory()) out.push(...jsFiles(file));
+    else if (entry.isFile() && /\.(?:js|mjs)$/.test(entry.name)) out.push(file);
+  }
+  return out;
+}
+for (const root of ['/usr/local/lib/node_modules/@earendil-works/pi-coding-agent', sdkRoot]) {
+  const compiled = jsFiles(path.join(root, 'dist')).map(file => fs.readFileSync(file, 'utf8'));
+  assert(compiled.some(text => text.includes('Maximum number of tools to return. Defaults to 1.')), `Missing patched tool_search schema under ${root}`);
+  assert(!compiled.some(text => text.includes('Maximum number of tools to return. Defaults to 8.')), `Old tool_search default remains under ${root}`);
+}
 if (process.argv.includes('--sdk-only')) {
-  console.log('Verified pinned Pi/Web UI versions and official Pi ESM SDK exports.');
+  console.log('Verified Pi ESM SDK imports, pinned versions, and tool_search default-limit patch.');
   process.exit(0);
 }
 const agentDir = process.env.PI_CODING_AGENT_DIR || '/home/pi/.pi/agent';

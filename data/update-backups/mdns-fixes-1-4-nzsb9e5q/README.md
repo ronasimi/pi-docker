@@ -1,10 +1,10 @@
-# Pi Docker — Pi 1.0 native MCP + Pi Web UI
+# Pi Docker — stock Pi 1.0 + Pi Web UI
 
-This repository runs `@earendil-works/pi-coding-agent` 1.0.0 with `pi-web-ui` 0.97.0. The Pi agent loop, MCP integration, tool search, and tool activation remain upstream Pi features, and the retired custom MCP orchestration layer is removed. One narrow build-time compatibility patch keeps the Web UI on the official Pi MCP/tool-search SDK factories and preserves deferred tools during settings replay. A tiny runtime extension normalizes an **omitted** `tool_search.limit` to `1` through Pi's official mutable `tool_call` hook. Explicit caller limits are unchanged. The compiled Pi package is no longer patched, avoiding brittle coupling to generated source text. There is no custom search/routing loop or MCP execution layer.
+This repository runs the official `@earendil-works/pi-coding-agent` 1.0.0 package with `pi-web-ui` 0.97.0. The Pi agent loop, MCP integration, tool search, and tool activation are upstream Pi features; the Pi npm package is unmodified and the retired custom MCP orchestration layer is removed. A version- and SHA-256-checked Web UI compatibility adjustment registers the official Pi MCP/tool-search SDK factories and preserves deferred tools when Web UI settings are replayed. It contains no custom search, routing, loop guard, or execution middleware.
 
 ## Runtime architecture
 
-The model starts with Pi's normal file/shell tools plus the built-in `tool_search` loader. When `limit` is omitted, the runtime guard sets it to one before execution; an explicit larger limit still requests a broader batch:
+The model starts with Pi's normal file/shell tools plus the built-in `tool_search` loader:
 
 - `read`
 - `bash`
@@ -14,7 +14,7 @@ The model starts with Pi's normal file/shell tools plus the built-in `tool_searc
 
 Pi's upstream `builtin:mcp` extension reads `config/mcp.json`. Pi CLI loads built-ins automatically; the Web UI SDK integration explicitly registers the same upstream factories. Every configured MCP server uses `exposure: "deferred"`, so MCP schemas remain outside the normal active tool set until Pi's built-in discovery loads a matching tool.
 
-The MCP servers own capability boundaries, target authorization, input bounds, tool descriptions, aliases, overlap metadata, and result handling. `APPEND_SYSTEM.md` contains compact behavioral/evidence guidance, including the distinction between named skills and deferred tool discovery and the rule that container network interfaces never substitute for host physical-interface state.
+The MCP servers own capability boundaries, target authorization, input bounds, tool descriptions, aliases, overlap metadata, and result handling. `APPEND_SYSTEM.md` contains only compact behavioral/evidence guidance and the temporary domain-routing section.
 
 ## Persistent state
 
@@ -107,9 +107,9 @@ After installing the pinned upstream packages in an isolated directory, run:
 node tests/native-mcp-smoke.mjs /path/to/pi-coding-agent /path/to/pi-web-ui /path/to/mcp-gateway
 ```
 
-Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that all owned tools remain deferred, verifies the omitted-limit one-result regression plus explicit bounded searches, every canonical tool name, and the failed run’s exact discovery query, and replays the actual Web UI settings function. It makes no model requests or network scans.
+Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that their 132 tools remain deferred, checks 18 intent queries, every canonical tool name, and the failed run’s exact discovery query, and replays the actual Web UI settings function. It makes no model requests or network scans.
 
-The Web UI compatibility adjustment is pinned to 0.97.0. `config/extensions/tool-search-default-limit.js` is the sole `tool_search` default-limit compatibility layer: the updater mounts only that file into Pi's standard global extension directory, preserving any other user extensions, and the post-deploy verifier exercises both omitted and explicit limits. No generated Pi SDK files are modified.
+The Web UI compatibility adjustment is pinned to 0.97.0. A different source hash stops the build for review; it never silently applies to another release. Pi remains the official 1.0.0 package.
 
 ## 2026-10-04 recon completion update
 
@@ -121,4 +121,4 @@ Pi uses `pi-docker/workspace` as `/workspace`. The complete installer aligns the
 
 ## Network recon skill
 
-The bundled native Pi skill is mounted from `config/skills/network-recon`. Start a new conversation after deploying and invoke `/skill:network-recon I am authorized to assess this laptop’s connected LAN. Complete the assessment and generate SVG and HTML maps.` A named skill must be read from its skill path before MCP discovery; the skill name is not itself a `tool_search` query. For host/LAN work, the skill requires targeted discovery of `get_host_interface_info {}` and forbids using Security-container `eth0` or an interface name merely listed in an error. It uses deferred Security MCP tools, tracks all stages and saved observations, and reports evidence limitations.
+The bundled native Pi skill is mounted from `config/skills/network-recon`. Start a new conversation after deploying and invoke `/skill:network-recon I am authorized to assess this laptop’s connected LAN. Complete the assessment and generate SVG and HTML maps.` It uses deferred Security MCP tools, tracks all stages and saved observations, and reports evidence limitations. It guides the model; it does not enforce execution in code.

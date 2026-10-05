@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build-time SDK configuration for pi-web-ui 0.97.0. Pi agent orchestration remains upstream-native.
+// Build-time SDK configuration for pi-web-ui 0.97.0. Pi itself is unmodified.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';

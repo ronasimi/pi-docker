@@ -44,7 +44,6 @@ services:
       - ./config/models-fallback.json:/etc/pi/models-fallback.json:ro
       - ./config/mcp.json:/home/pi/.pi/agent/mcp.json:ro
       - ./config/APPEND_SYSTEM.md:/home/pi/.pi/agent/APPEND_SYSTEM.md:ro
-      - ./config/extensions/tool-search-default-limit.js:/home/pi/.pi/agent/extensions/tool-search-default-limit.js:ro
       # Native Pi skill; preserve any other user-installed skills.
       - ./config/skills/network-recon:/home/pi/.pi/agent/skills/network-recon:ro
       # Dedicated repository-local workspace shared with MCP tools.

@@ -1,6 +1,6 @@
 ---
 name: network-recon
-description: Assess an authorized laptop LAN using Security MCP host state, network discovery, topology, passive Wi-Fi analysis, and SVG/HTML maps. When selected by name, read this skill before MCP discovery; the skill name itself is not a tool_search query. Use for local network reconnaissance, device inventory, wireless assessment, or a complete network map.
+description: Assess an authorized laptop LAN using Security MCP host state, network discovery, topology, passive Wi-Fi analysis, and SVG/HTML maps. Use for local network reconnaissance, device inventory, wireless assessment, or a complete network map.
 ---
 
 # Network reconnaissance
@@ -37,9 +37,7 @@ For each new capability, search its exact operation name with `limit: 1`, inspec
 
 Call the discovered host-state tool with `{}`. Search operation names, rather than broad phrases such as “security MCP tools”. Reuse loaded tools.
 
-If a call returns “Tool not found”, search that exact operation and retry using the returned name and schema. This means the tool was not loaded; it does not establish that host access is unavailable. If search returns an unrelated match, refine once with `security` plus the operation. Report a capability unavailable only after this targeted recovery fails or the actual tool reports an execution limitation. Never invoke an MCP tool merely because its name appeared in instructions; it must already be loaded or be the exact result of `tool_search`.
-
-`security_network_interfaces` / `mcp__security__network_interfaces` is **container-only diagnostic state** and is never a substitute for `get_host_interface_info`. Its `eth0` is not the laptop physical interface. Likewise, an error that lists available physical interface names is diagnostic evidence only; do not pick one from that list. Resolve and call `get_host_interface_info` with `{}` and reuse its returned `selected_interface`. If that targeted capability cannot be loaded, report host-state discovery unavailable rather than guessing an interface.
+If a call returns “Tool not found”, search that exact operation and retry using the returned name and schema. This means the tool was not loaded; it does not establish that host access is unavailable. If search returns an unrelated match, refine once with `security` plus the operation. Report a capability unavailable only after this targeted recovery fails or the actual tool reports an execution limitation.
 
 Pi Bash, `ip`, and `/sys/class/net` describe the container. Use the host helper for laptop network operations. A missing container binary is not a host-network failure. Use Bash/read only for workspace artifacts when necessary. Use loaded instructions for initialization; no assumed `.init` file is required.
 
@@ -79,11 +77,7 @@ Retain every successful `observation_path`, including partial results and discov
 
 ## mDNS subnet leads
 
-When asked to find other subnets from mDNS, first complete host state with `get_host_interface_info {}`. Then search `discover_mdns_subnets` with `limit: 1` and call its exact returned tool using the host-state `selected_interface`. Do not derive the interface from container diagnostics or from an error message's list of available interfaces. Retain its observation path. If `status`/`coverage` is `unavailable` or `evidence_available` is false, preserve diagnostics and report advertised hosts, candidate ranges, and reflection evidence as **unavailable**; empty arrays are placeholders for failed collection and are not negative findings.
-
-For the final mDNS host table, **use `report_hosts` row-by-row as the authoritative reporting projection**. Copy each `hostname` exactly. Use only the IPv4/IPv6 addresses and services present on that same row. Never derive a hostname from an IP address, never substitute a DNS-SD service instance for its `target_hostname`, and never move an address or service between rows. `packet_source_addresses` are UDP senders and are not advertised host IPs. `advertised_hosts` and `services` remain normalized evidence, while `raw_records` are audit evidence only and must not be re-joined manually when `report_hosts` is present. Do not invent a device role: model/friendly-name fields in `report_hosts.services` may be reported as advertised metadata; otherwise leave the role unknown. For candidate ranges, prefer `report_candidate_networks` and preserve its exact CIDR, range_start, range_end, address_count, basis, and address_scope. `fc00::/7` is IPv6 unique-local space; only `fe80::/10` is link-local.
-
-If `coverage` is `partial`, report `coverage_limitations`, `query_limit`, and `queries_suppressed_by_limit`; never describe a query-limited collection as complete. A heuristic /24 or /64 is a grouping hypothesis, not a discovered mask; a known route is routing coverage, not proof of a remote subnet boundary. Keep possible_reflection distinct from reflector_confirmed. Do not expand scans to advertised ranges without explicit scope authorization. The collector sends bounded DNS-SD queries; it does not scan hosts. IPv6-only multicast is not covered.
+When asked to find other subnets from mDNS, search `discover_mdns_subnets` with `limit: 1` and call its exact returned tool using the observed physical interface. Retain its observation path. Report advertised addresses, candidate CIDRs, range_start/range_end, and basis. A heuristic /24 or /64 is a grouping hypothesis, not a discovered mask; a known route is routing coverage, not proof of a remote subnet boundary. Keep possible_reflection distinct from reflector_confirmed. Do not expand scans to advertised ranges without explicit scope authorization. The collector sends bounded DNS-SD queries; it does not scan hosts. IPv6-only multicast is not covered.
 
 ## Evidence rules
 

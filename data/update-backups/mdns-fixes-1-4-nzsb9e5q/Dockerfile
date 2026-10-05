@@ -12,12 +12,8 @@ RUN apt-get update && \
     npm install --prefix /usr/local/lib/node_modules/pi-web-ui --ignore-scripts --omit=dev --no-save "@earendil-works/pi-coding-agent@${PI_VERSION}" && \
     rm -rf /root/.npm /var/lib/apt/lists/*
 
-# Omitted tool_search.limit is normalized at runtime by
-# config/extensions/tool-search-default-limit.js. Avoid patching Pi's compiled
-# distribution: package layout/text is not a stable compatibility surface.
-
-# Configure the official SDK factories in the Web UI and retain deferred
-# activation on settings reload.
+# Configure the official SDK factories in the Web UI, and retain deferred
+# activation on its settings reload. The Pi package is never patched.
 COPY scripts/configure-web-ui-native-mcp.mjs /usr/local/lib/pi-docker/configure-web-ui-native-mcp.mjs
 RUN node /usr/local/lib/pi-docker/configure-web-ui-native-mcp.mjs
 

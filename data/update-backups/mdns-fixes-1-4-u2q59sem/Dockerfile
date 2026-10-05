@@ -12,9 +12,13 @@ RUN apt-get update && \
     npm install --prefix /usr/local/lib/node_modules/pi-web-ui --ignore-scripts --omit=dev --no-save "@earendil-works/pi-coding-agent@${PI_VERSION}" && \
     rm -rf /root/.npm /var/lib/apt/lists/*
 
-# Omitted tool_search.limit is normalized at runtime by
-# config/extensions/tool-search-default-limit.js. Avoid patching Pi's compiled
-# distribution: package layout/text is not a stable compatibility surface.
+# Keep native deferred discovery narrow for small local models: an omitted
+# tool_search.limit loads one schema, while explicit broader limits still work.
+# The patch is pinned to Pi 1.0.0 and fails closed if upstream code moves.
+COPY scripts/patch-tool-search-default.mjs /usr/local/lib/pi-docker/patch-tool-search-default.mjs
+RUN node /usr/local/lib/pi-docker/patch-tool-search-default.mjs \
+      /usr/local/lib/node_modules/@earendil-works/pi-coding-agent \
+      /usr/local/lib/node_modules/pi-web-ui/node_modules/@earendil-works/pi-coding-agent
 
 # Configure the official SDK factories in the Web UI and retain deferred
 # activation on settings reload.

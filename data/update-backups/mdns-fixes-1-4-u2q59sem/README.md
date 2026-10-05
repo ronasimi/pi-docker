@@ -1,6 +1,6 @@
 # Pi Docker — Pi 1.0 native MCP + Pi Web UI
 
-This repository runs `@earendil-works/pi-coding-agent` 1.0.0 with `pi-web-ui` 0.97.0. The Pi agent loop, MCP integration, tool search, and tool activation remain upstream Pi features, and the retired custom MCP orchestration layer is removed. One narrow build-time compatibility patch keeps the Web UI on the official Pi MCP/tool-search SDK factories and preserves deferred tools during settings replay. A tiny runtime extension normalizes an **omitted** `tool_search.limit` to `1` through Pi's official mutable `tool_call` hook. Explicit caller limits are unchanged. The compiled Pi package is no longer patched, avoiding brittle coupling to generated source text. There is no custom search/routing loop or MCP execution layer.
+This repository runs `@earendil-works/pi-coding-agent` 1.0.0 with `pi-web-ui` 0.97.0. The Pi agent loop, MCP integration, tool search, and tool activation remain upstream Pi features, and the retired custom MCP orchestration layer is removed. Two narrow build-time compatibility patches are applied fail-closed: the Web UI registers the official Pi MCP/tool-search SDK factories and preserves deferred tools during settings replay, and the compiled Pi 1.0.0 tool-search default is narrowed. A tiny runtime extension also normalizes an **omitted** `tool_search.limit` to `1` through Pi's official `tool_call` hook because the live Web UI path can otherwise retain the upstream default of 8. Explicit caller limits are unchanged. There is no custom search/routing loop or MCP execution layer.
 
 ## Runtime architecture
 
@@ -109,7 +109,7 @@ node tests/native-mcp-smoke.mjs /path/to/pi-coding-agent /path/to/pi-web-ui /pat
 
 Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that all owned tools remain deferred, verifies the omitted-limit one-result regression plus explicit bounded searches, every canonical tool name, and the failed run’s exact discovery query, and replays the actual Web UI settings function. It makes no model requests or network scans.
 
-The Web UI compatibility adjustment is pinned to 0.97.0. `config/extensions/tool-search-default-limit.js` is the sole `tool_search` default-limit compatibility layer: the updater mounts only that file into Pi's standard global extension directory, preserving any other user extensions, and the post-deploy verifier exercises both omitted and explicit limits. No generated Pi SDK files are modified.
+The Web UI compatibility adjustment is pinned to 0.97.0. The compiled `tool_search` default-limit patch is pinned to Pi 1.0.0 and requires both the schema text and compiled execution default to match. A mismatched package/layout stops the build for review instead of silently applying a partial patch. `config/extensions/tool-search-default-limit.js` is the runtime backstop: the updater mounts only that file into Pi's extension directory, preserving any other user extensions, and the post-deploy verifier exercises omitted and explicit limits.
 
 ## 2026-10-04 recon completion update
 
