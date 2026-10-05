@@ -43,29 +43,6 @@ test('get_host_interface_info drops null optional interface so auto-selection re
   assert.deepEqual(event.input,{});
 });
 
-
-
-test('get_host_interface_info drops stringified empty object so auto-selection receives {}',()=>{
-  const handler=install();
-  const event={toolName:'mcp__security__get_host_interface_info',input:{interface:'{}'}};
-  handler(event);
-  assert.deepEqual(event.input,{});
-});
-
-test('get_host_interface_info drops blank optional interface',()=>{
-  const handler=install();
-  const event={toolName:'mcp__security__get_host_interface_info',input:{interface:'   '}};
-  handler(event);
-  assert.deepEqual(event.input,{});
-});
-
-test('get_host_interface_info drops an empty-object optional interface',()=>{
-  const handler=install();
-  const event={toolName:'mcp__security__get_host_interface_info',input:{interface:{}}};
-  handler(event);
-  assert.deepEqual(event.input,{});
-});
-
 test('get_host_interface_info preserves explicit interface',()=>{
   const handler=install();
   const event={toolName:'mcp__security__get_host_interface_info',input:{interface:'wlp3s0'}};

@@ -13,11 +13,8 @@ export default function toolSearchDefaultLimit(pi) {
       event.input.limit = 1;
       return;
     }
-    if (event.toolName === 'mcp__security__get_host_interface_info') {
-      const value = event.input.interface;
-      const emptyObject = value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
-      const emptyString = typeof value === 'string' && (value.trim() === '' || value.trim() === '{}');
-      if (value == null || emptyObject || emptyString) delete event.input.interface;
+    if (event.toolName === 'mcp__security__get_host_interface_info' && event.input.interface == null) {
+      delete event.input.interface;
     }
   });
 }
