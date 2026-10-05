@@ -113,7 +113,7 @@ The Web UI compatibility adjustment is pinned to 0.97.0. `config/extensions/tool
 
 ## 2026-10-04 recon completion update
 
-Topology preserves partial results when capture is unavailable. Wireless units are explicit. Host observation artifacts feed map input_paths directly. mDNS subnet discovery returns compact report rows and keeps full raw DNS audit evidence in a separate observation artifact to avoid context blowups. Pi builds now verify the ESM SDK import before deployment. See the bundle RECON-COMPLETION-FIXES.md for validation and limits.
+Topology preserves partial results when capture is unavailable. Wireless units are explicit. Host observation artifacts feed map input_paths directly. Pi builds now verify the ESM SDK import before deployment. See the bundle RECON-COMPLETION-FIXES.md for validation and limits.
 
 ## Dedicated agent workspace
 
