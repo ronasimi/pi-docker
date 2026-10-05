@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+[[ ! -L workspace ]] || { echo "workspace must be a repository-local directory" >&2; exit 1; }
+mkdir -p workspace
+if [[ $(id -u) -eq 0 ]]; then chown 1000:1000 workspace; fi
 
 python3 scripts/migrate-stock-settings.py "$ROOT" --check
 bash -n scripts/container-entrypoint.sh

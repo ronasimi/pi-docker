@@ -114,3 +114,11 @@ The Web UI compatibility adjustment is pinned to 0.97.0. A different source hash
 ## 2026-10-04 recon completion update
 
 Topology preserves partial results when capture is unavailable. Wireless units are explicit. Host observation artifacts feed map input_paths directly. Pi builds now verify the ESM SDK import before deployment. See the bundle RECON-COMPLETION-FIXES.md for validation and limits.
+
+## Dedicated agent workspace
+
+Pi uses `pi-docker/workspace` as `/workspace`. The complete installer aligns the MCP workspace and retains files in the old location. See `docs/WORKSPACE-UPDATE.md`.
+
+## Network recon skill
+
+The bundled native Pi skill is mounted from `config/skills/network-recon`. Start a new conversation after deploying and invoke `/skill:network-recon I am authorized to assess this laptop’s connected LAN. Complete the assessment and generate SVG and HTML maps.` It uses deferred Security MCP tools, tracks all stages and saved observations, and reports evidence limitations. It guides the model; it does not enforce execution in code.

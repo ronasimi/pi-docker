@@ -44,8 +44,10 @@ services:
       - ./config/models-fallback.json:/etc/pi/models-fallback.json:ro
       - ./config/mcp.json:/home/pi/.pi/agent/mcp.json:ro
       - ./config/APPEND_SYSTEM.md:/home/pi/.pi/agent/APPEND_SYSTEM.md:ro
-      # Let Pi work directly on the host Projects tree.
-      - ${HOME}/Projects:/workspace
+      # Native Pi skill; preserve any other user-installed skills.
+      - ./config/skills/network-recon:/home/pi/.pi/agent/skills/network-recon:ro
+      # Dedicated repository-local workspace shared with MCP tools.
+      - ./workspace:/workspace
 
     networks:
       - ai-local

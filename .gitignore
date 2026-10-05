@@ -7,3 +7,8 @@ data/pi/*
 data/web/*
 !data/web/.gitkeep
 **/node_modules/
+
+# Agent files stay local and outside version control.
+workspace/*
+workspace/.*
+!workspace/.gitkeep

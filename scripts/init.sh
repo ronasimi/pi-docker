@@ -7,9 +7,10 @@ if [[ ! -f .env ]]; then
 fi
 
 # Host bind mounts replace opaque Docker volumes. Container user pi is UID/GID 1000.
-mkdir -p data/pi/agent data/web
+mkdir -p data/pi/agent data/web workspace
 if [[ $(id -u) -eq 0 ]]; then
   chown -R 1000:1000 data/pi data/web
+  chown 1000:1000 workspace
 fi
 
 # MCP gateway v10 exposes trusted client endpoints directly on ai-local;
