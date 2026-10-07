@@ -3,18 +3,13 @@
     "searxng": {
       "url": "http://mcp-searxng:8888/mcp/",
       "exposure": "deferred",
-      "description": "Public web search for current information, news, URLs, and sources. Operational retrieval capability: search.",
-      "timeout": 30.0,
-      "toolExposure": {
-        "engine_info": "hidden",
-        "autocomplete": "hidden",
-        "search": "deferred"
-      }
+      "description": "SearXNG search.",
+      "timeout": 30.0
     },
     "playwright": {
       "url": "http://mcp-gateway:8931/mcp",
       "exposure": "deferred",
-      "description": "Live browser navigation, page snapshots, and page actions for reading or interacting with known URLs.",
+      "description": "Playwright browser.",
       "timeout": 60.0,
       "toolExposure": {
         "browser_close": "hidden"
@@ -23,12 +18,8 @@
     "memory": {
       "url": "http://mcp-gateway:8932/mcp",
       "exposure": "deferred",
-      "description": "Knowledge graph memory. Retrieval capability: search_nodes; use targeted entity operations for reads and writes.",
-      "timeout": 30.0,
-      "toolExposure": {
-        "read_graph": "hidden",
-        "search_nodes": "deferred"
-      }
+      "description": "Knowledge graph memory.",
+      "timeout": 30.0
     },
     "system": {
       "url": "http://mcp-system:8933/mcp",

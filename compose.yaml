@@ -33,6 +33,7 @@ services:
       PI_OLLAMA_DISCOVERY_RETRY_SECONDS: ${PI_OLLAMA_DISCOVERY_RETRY_SECONDS:-30}
       PI_OLLAMA_HIDE_ALIAS_SOURCES: ${PI_OLLAMA_HIDE_ALIAS_SOURCES:-true}
       PI_WEB_MANAGED: "1"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
 
     volumes:
       # Host-visible durable state. These directories are created by scripts/init.sh.
