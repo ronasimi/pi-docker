@@ -25,7 +25,7 @@ test('deterministic report includes bounded collected facts with their actual re
 
 test('control-only assessment settlement gets one continuation, then a measured partial report',async()=>{const f=harness();await f.emit('before_agent_start',{prompt:'TASK 1 — Assess the host infrastructure and report findings'});await f.emit('tool_result',{toolName:'mcp__system__host_snapshot',toolCallId:'host',input:{},content:[{type:'text',text:'{"hostname":"fixture-host"}'}]});const message={role:'assistant',stopReason:'stop',content:[{type:'text',text:'</request>\n'}]};assert.equal(await f.emit('message_end',{message}),undefined);const repair=await f.emit('agent_before_settle',{outcome:'completed',context:{pendingMessages:[],contextMessages:[message]}});assert.equal(repair.continue,true);assert.equal(repair.entries[0].customType,'pi.atomic-empty-settlement-repair');assert.match(repair.entries[0].content,/Do not repeat successful/);const final=await f.emit('message_end',{message});assert.match(final.message.content[0].text,/fixture-host/);assert.match(final.message.content[0].text,/Partial observations/);assert.equal(await f.emit('agent_before_settle',{outcome:'completed',context:{pendingMessages:[],contextMessages:[final.message]}}),undefined);});
 
-test('runtime fingerprint records the loaded revision and does not repair requested literal markers',async()=>{const f=harness();await f.emit('session_start',{});const {RUNTIME_FINGERPRINT}=await import('../lib/runtime.js');assert.equal(RUNTIME_FINGERPRINT.release,'r24');assert.equal(RUNTIME_FINGERPRINT.atomicVersion,'0.2.3');assert.match(RUNTIME_FINGERPRINT.extensionSha256,/^[a-f0-9]{64}$/);await f.emit('before_agent_start',{prompt:'Print the literal </request> marker'});const message={role:'assistant',stopReason:'stop',content:[{type:'text',text:'</request>'}]};assert.equal(await f.emit('agent_before_settle',{outcome:'completed',context:{pendingMessages:[],contextMessages:[message]}}),undefined);assert.equal(await f.emit('message_end',{message}),undefined);});
+test('runtime fingerprint records the loaded revision and does not repair requested literal markers',async()=>{const f=harness();await f.emit('session_start',{});const {RUNTIME_FINGERPRINT}=await import('../lib/runtime.js');assert.equal(RUNTIME_FINGERPRINT.release,'r24');assert.equal(RUNTIME_FINGERPRINT.atomicVersion,'0.2.5');assert.match(RUNTIME_FINGERPRINT.extensionSha256,/^[a-f0-9]{64}$/);await f.emit('before_agent_start',{prompt:'Print the literal </request> marker'});const message={role:'assistant',stopReason:'stop',content:[{type:'text',text:'</request>'}]};assert.equal(await f.emit('agent_before_settle',{outcome:'completed',context:{pendingMessages:[],contextMessages:[message]}}),undefined);assert.equal(await f.emit('message_end',{message}),undefined);});
 
 
 test('router synonyms and explicit subjects select the matching read operation',()=>{
@@ -40,3 +40,78 @@ test('router synonyms and explicit subjects select the matching read operation',
  assert.equal(relevantDiscovery('mcp__security__router',tools[0]).ok,false);
  assert.equal(relevantDiscovery('router',tools.at(-1)).ok,false);
 });
+
+
+test('replays new run routing failures without unrelated matches',async()=>{
+ const {capabilityForQuery}=await import('../lib/capabilities.js');
+ const tools=[...catalogue,tool('ollama_api_inventory','Ollama model inventory'),tool('mcp_endpoint_health','MCP health'),tool('mcp__security__generate_graphical_network_map','Render collected passive network discovery data into maps'),tool('mcp__playwright__browser_network_request','Browser request details')];
+ const ranked=query=>tools.map(t=>({name:t.name,...relevantDiscovery(query,t)})).filter(t=>t.ok).sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name))[0]?.name;
+ for(const q of ['system list routers','mcp router list','router list','routers list'])assert.equal(ranked(q),'mcp__system__openwrt_targets',q);
+ for(const q of ['mcp openwrt status routes firmware','system router status']){assert.equal(ranked(q),'mcp__system__openwrt_status',q);assert.equal(capabilityForQuery(q),'routers');}
+ for(const q of ['mcp passive network discovery','security passive network observation mDNS ssdp','mcp passive discovery arp mDNS SSDP','security passive scan']){assert.equal(ranked(q),'mcp__security__observe_broadcast_multicast',q);assert.equal(capabilityForQuery(q),'passive_network');}
+ for(const q of ['official ollama api documentation','web search ollama api documentation']){assert.equal(ranked(q),'mcp__searxng__search',q);assert.equal(capabilityForQuery(q),'web_verification');}
+ assert.equal(ranked('playwright open official ollama documentation page'),'mcp__playwright__browser_navigate');
+ assert.equal(ranked('mcp playwright browser tool'),'mcp__playwright__browser_snapshot');
+ assert.equal(ranked('mcp health status'),'mcp_endpoint_health');
+ assert.equal(ranked('ollama models inventory'),'ollama_api_inventory');
+});
+
+test('textual discovery plans get one structured-call retry and never execute invented arguments',async()=>{
+ const f=harness();await f.emit('before_agent_start',{prompt:'Perform a bounded read-only assessment of my Pi Docker and network.'});
+ const message={role:'assistant',stopReason:'stop',content:[{type:'text',text:'Tool sequence to execute the above tasks:\n\n1. tool_search: system host inventory\n2. tool_invoke: invented_operation {arguments:{type:"invented"}}'}]};
+ const event={outcome:'completed',context:{pendingMessages:[],contextMessages:[message]}};
+ const repair=await f.emit('agent_before_settle',event);assert.equal(repair.continue,true);assert.match(repair.entries[0].content,/real structured tool_search/);assert.equal(f.calls(),0);
+ assert.equal(await f.emit('agent_before_settle',event),undefined);assert.equal(f.calls(),0);
+ const final=await f.emit('message_end',{message});assert.match(final.message.content[0].text,/Successful executed tool calls:\*\* 0/);assert.doesNotMatch(final.message.content[0].text,/invented_operation/);
+ const example=harness();await example.emit('before_agent_start',{prompt:'Explain an example tool sequence for a network assessment.'});assert.equal(await example.emit('agent_before_settle',event),undefined);
+});
+
+test('an explicit thirty-call request bounds execution and resets on a later request',async()=>{
+ const f=harness();await f.emit('before_agent_start',{prompt:'Assess host infrastructure. Use at most 30 tool calls, then report.'});
+ for(let i=0;i<30;i++)assert.equal(await f.emit('tool_call',{toolName:'result_list',toolCallId:'call'+i,input:{limit:1}}),undefined);
+ const blocked=await f.emit('tool_call',{toolName:'result_list',toolCallId:'overflow',input:{limit:1}});assert.equal(blocked.block,true);assert.match(blocked.reason,/30 attempted calls/);
+ await f.emit('before_agent_start',{prompt:'Assess host infrastructure.'});
+ for(let i=0;i<31;i++)assert.equal(await f.emit('tool_call',{toolName:'result_list',toolCallId:'next'+i,input:{limit:1}}),undefined);
+});
+
+test('assessment wording before the subject still uses the measured ledger report',async()=>{
+ const f=harness();await f.emit('before_agent_start',{prompt:'Perform a bounded, read-only assessment of my Pi Docker, Ollama, MCP Gateway, and home network.'});
+ await f.emit('tool_result',{toolName:'mcp__system__host_snapshot',toolCallId:'actual-host',input:{},content:[{type:'text',text:'{"hostname":"measured-host"}'}]});
+ const final=await f.emit('message_end',{message:{role:'assistant',stopReason:'stop',content:[{type:'text',text:'Assessment Report: all tasks complete. result:invented'}]}});
+ assert.match(final.message.content[0].text,/measured-host/);assert.doesNotMatch(final.message.content[0].text,/result:invented|all tasks complete/);
+});
+
+
+test('passive metadata permits read-only discovery and fresh captures while active probes stay denied',async()=>{
+ const f=harness();const name='mcp__security__observe_broadcast_multicast';
+ const capture=f.tools.get(name);capture.parameters={type:'object',properties:{duration_seconds:{type:'integer',minimum:1,maximum:30}},'x-pi-effect':'passive_capture'};capture.annotations={readOnlyHint:false,idempotentHint:false};
+ await f.emit('before_agent_start',{prompt:'Perform a read-only passive network assessment. No active scans.'});
+ const search={toolName:'tool_search',toolCallId:'capture-search',input:{query:'security passive network observation'}};
+ await f.emit('tool_call',search);const ready=await f.emit('tool_result',{...search,content:[],details:{loaded:[name]}});assert.equal(JSON.parse(ready.content[0].text).discovery,'ready');
+ const invoke=f.tools.get('tool_invoke');await invoke.execute('capture-one',{name,arguments:{duration_seconds:10}},null,null,f.ctx);await invoke.execute('capture-two',{name,arguments:{duration_seconds:10}},null,null,f.ctx);assert.equal(f.calls(),2,'later captures are fresh');
+ const probe={name:'mcp__security__probe_gateway_proxy_arp',exposure:'deferred',description:'Active ARP probe',parameters:{type:'object',properties:{},'x-pi-effect':'active_probe'}};f.tools.set(probe.name,probe);
+ const denied=await f.emit('tool_call',{toolName:'tool_invoke',toolCallId:'probe',input:{name:probe.name,arguments:{}}});assert.equal(denied.block,true);assert.equal(f.calls(),2);
+});
+
+
+test('Masscan discovery never substitutes Nmap or passive observation, including massscan spelling',()=>{
+ const toolset=[tool('mcp__security__masscan_scan','Masscan TCP SYN port scanner.'),tool('mcp__security__port_scan','Nmap TCP port scanner.'),tool('mcp__security__observe_broadcast_multicast','Passive packet capture.')];
+ for(const query of ['masscan','massscan','security masscan scan','security massscan TCP scan']){
+  const ranked=toolset.map(t=>({name:t.name,...relevantDiscovery(query,t)})).filter(t=>t.ok).sort((a,b)=>b.score-a.score);assert.equal(ranked[0]?.name,'mcp__security__masscan_scan',query);assert(!ranked.some(t=>t.name==='mcp__security__port_scan'));
+ }
+});
+
+test('Masscan requires runtime opt-in and scan intent; adding a tool or passive-only requests never authorize execution',async()=>{
+ const variable='PI_ATOMIC_RESULTS_ALLOW_ACTIVE_NETWORK_PROBES',old=process.env[variable];
+ try {
+  for(const [optIn,prompt,allowed] of [['false','I explicitly authorize a Masscan scan of 192.168.1.10.',false],['true','Please add a Masscan tool.',false],['true','I authorize a Masscan scan, but keep this assessment read-only.',false],['true','Please run a masscan scan against 192.168.1.10.',true]]) {
+   process.env[variable]=optIn;const f=harness(),name='mcp__security__masscan_scan';f.tools.set(name,{name,exposure:'deferred',description:'Masscan TCP SYN scan.',parameters:{type:'object',properties:{target:{type:'string'},ports:{type:'string'}},required:['target','ports'],'x-pi-effect':'active_probe'},annotations:{readOnlyHint:false,idempotentHint:false}});
+   await f.emit('before_agent_start',{prompt});
+   const search={toolName:'tool_search',toolCallId:'masscan-search',input:{query:'security masscan scan'}};await f.emit('tool_call',search);
+   const reply=await f.emit('tool_result',{...search,content:[],details:{loaded:[name]}});assert.equal(JSON.parse(reply.content[0].text).discovery==='ready',allowed,prompt);
+   if(allowed){await f.tools.get('tool_invoke').execute('scan',{name,arguments:{target:'192.168.1.10',ports:'80'}},null,null,f.ctx);assert.equal(f.calls(),1);}
+   else {const denied=await f.emit('tool_call',{toolName:'tool_invoke',toolCallId:'no-scan',input:{name,arguments:{target:'192.168.1.10',ports:'80'}}});assert.equal(denied.block,true);assert.equal(f.calls(),0);}
+  }
+ } finally {if(old===undefined)delete process.env[variable];else process.env[variable]=old;}
+});
+

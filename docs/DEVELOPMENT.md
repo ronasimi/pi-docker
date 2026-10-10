@@ -55,3 +55,9 @@ Historical revision names were replaced with capability names. Useful regression
 - Loaded runtime fingerprint and symlink-safe startup policy execution.
 
 Offline fixtures establish software behavior. They do not establish live model quality, multicast delivery, router state or endpoint connectivity. Docker image builds and live deployment remain host checks.
+
+## Atomic 0.2.4 regressions
+
+The October 10 run queries cover router lists, router/MCP status separation, passive listener selection, documentation/model separation and generic browser snapshots. Fixtures cover passive metadata, fresh captures, active-probe rejection, thirty-call limits and reset, one textual-plan retry, exhausted-retry evidence reports and assessment wording in either order. A real stock SDK/provider-stream test exercises the retry through structured discovery and invocation.
+
+Keep the eight provider tool declarations and historical tool results immutable. Changing schemas every turn or rewriting old results would invalidate the stable prefix and increase prefill. The prompt remains below 4,095 UTF-8 bytes. These checks establish software behavior, not live model throughput.

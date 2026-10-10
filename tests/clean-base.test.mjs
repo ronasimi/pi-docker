@@ -59,3 +59,7 @@ test('runtime origin resolves Pi import-only exports without a CommonJS main',as
  assert.equal(await fs.realpath(sdkOrigin(webRoot)),await fs.realpath(sdkRoot));
  assert.equal(JSON.parse(await fs.readFile(path.join(sdkRoot,'package.json'))).version,VERSIONS.pi);
 });
+
+test('Compose exposes active-network opt-in without enabling it by default',async()=>{
+ const compose=await fs.readFile(path.join(root,'compose.yaml'),'utf8');assert.match(compose,/PI_ATOMIC_RESULTS_ALLOW_ACTIVE_NETWORK_PROBES: \$\{PI_ATOMIC_RESULTS_ALLOW_ACTIVE_NETWORK_PROBES:-false\}/);
+});

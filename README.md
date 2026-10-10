@@ -77,7 +77,7 @@ In a Pi session, `/atomic-version` displays the loaded release and source digest
 | :--- | :--- |
 | Pi coding agent | 1.1.0 |
 | Pi Web UI | 0.100.0 |
-| Atomic tool/results | 0.2.3 |
+| Atomic tool/results | 0.2.5 |
 | Native services bridge | 1.0.0 |
 
 `runtime/package-lock.json` controls installation through `npm ci`. Old version variables in `.env` do not change these pins. The native bridge uses public SDK factories; custom code stays outside installed upstream packages.

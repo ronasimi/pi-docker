@@ -34,7 +34,7 @@ COPY --chown=pi:pi tests/cli.integration.test.mjs tests/agent-loop-benchmark.tes
 COPY --chown=pi:pi setup-qwen.sh /opt/pi-app/setup-qwen.sh
 COPY --chown=pi:pi tests/fixtures /opt/pi-app/tests/fixtures/
 COPY runtime/package.json runtime/package-lock.json runtime/versions.json /opt/pi-app/runtime/
-COPY Dockerfile /opt/pi-app/Dockerfile
+COPY Dockerfile compose.yaml /opt/pi-app/
 RUN ln -s /opt/pi-extensions /opt/pi-app/extensions && \
     ln -s /opt/pi-app/scripts /usr/local/lib/pi-docker && \
     cp -a /opt/pi-app/config/. /etc/pi/ && \

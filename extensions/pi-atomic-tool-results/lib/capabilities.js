@@ -1,12 +1,13 @@
-import { toolSignature } from './progress.js';
+import { toolSignature, isWebDiscovery, isMcpHealthDiscovery } from './progress.js';
 // Turn-scoped deterministic discovery budgets. The model cannot bypass a missing
 // capability by synonym swapping. Never change provider tool declarations.
 export function capabilityForQuery(query) {
   const s = String(query ?? '').toLowerCase().replace(/[_-]/g, ' ');
+  if (isWebDiscovery(s)) return 'web_verification';
+  if (isMcpHealthDiscovery(s)) return 'mcp_health';
   if (/\bollama\b|\b(list|running|installed) models?\b/.test(s)) return 'ollama_inventory';
-  if (/\bmcp\b.*\b(health|status|connect|available|service)|\b(health|status)\b.*\bmcp\b/.test(s)) return 'mcp_health';
-  if (/\b(openwrt|anansi|arachne|router)\b/.test(s)) return 'routers';
-  if (/\b(mdns|ssdp|llmnr|multicast|bonjour)\b/.test(s)) return 'passive_network';
+  if (/\b(openwrt|anansi|arachne|routers?)\b/.test(s)) return 'routers';
+  if (/\b(mdns|ssdp|llmnr|multicast|bonjour)\b|\bpassive\b.*\b(network|scan|discovery|observation)\b/.test(s)) return 'passive_network';
   if (/\b(isolation|hairpin|proxy\s*arp|leakage)\b/.test(s)) return 'isolation';
   if (/\b(subnet|topology|reflector)\b/.test(s)) return 'topology';
   if (/\bdocker\b.*\bimage\b/.test(s)) return 'docker_images';

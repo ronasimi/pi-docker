@@ -5,10 +5,20 @@ import { classifyOutcome } from './outcome.js';
 
 const NOISE = new Set(['mcp', 'tool', 'tools', 'please', 'find', 'available', 'operation', 'server', 'using', 'for', 'the', 'a', 'an', 'on', 'in', 'to', 'of', 'and', 'with', 'get', 'show']);
 const DANGEROUS = new Set(['delete', 'remove', 'erase', 'destroy', 'kill', 'stop', 'send', 'write', 'modify', 'exploit', 'attack', 'bruteforce', 'format']);
-const STEM = { targets:'target', clients:'client', aliases:'alias', logs:'log', containers: 'container', images: 'image', models: 'model', interfaces: 'interface', resources: 'resource', nodes: 'node', services: 'service', routers: 'router', files: 'file', lists: 'list', listing: 'list', searching: 'search', discover: 'discovery', status: 'status', hosts: 'host' };
+const STEM = { massscan:'masscan', targets:'target', clients:'client', aliases:'alias', logs:'log', containers: 'container', images: 'image', models: 'model', interfaces: 'interface', resources: 'resource', nodes: 'node', services: 'service', routers: 'router', files: 'file', lists: 'list', listing: 'list', searching: 'search', discover: 'discovery', status: 'status', hosts: 'host' };
 const keywords = value => String(value ?? '').toLowerCase().replace(/([a-z])([A-Z])/g, '$1 $2').split(/[^a-z0-9]+/).filter(Boolean).map(x => STEM[x] ?? x).filter(x => !NOISE.has(x));
 const normalize = value => keywords(value).join(' ');
 const digest = data => createHash('sha256').update(typeof data === 'string' ? data : JSON.stringify(data)).digest('hex').slice(0, 16);
+export function isWebDiscovery(query) {
+  return /\b(?:documentation|docs|official|web|searxng|browser|playwright|page|website)\b/i.test(String(query ?? '').replaceAll('_',' '));
+}
+export function isMcpHealthDiscovery(query) {
+  const s = String(query ?? '').toLowerCase().replaceAll('_',' ');
+  // "mcp openwrt status" describes a router, not the MCP transport.
+  return /\bmcp\b/.test(s) && /\b(?:health|status|connectivity|connection|handshake|endpoints?)\b/.test(s)
+    && (!/\b(?:openwrt|routers?|anansi|arachne)\b/.test(s) || /\b(?:handshake|endpoints?|connectivity|connection)\b/.test(s));
+}
+const routerTargets = q => q.some(x=>['target','alias'].includes(x)) || (q.includes('list') && !q.some(x=>['client','wifi','wireless','interface','route','log','uci','config','configuration','package','ubus'].includes(x)));
 function operationWords(tool) {
   return keywords(tool.name).filter(x => !['mcp'].includes(x));
 }
@@ -35,7 +45,7 @@ function intentFitness(q, name) {
   if (router) {
     const logs = q.some(x=>['log','logs','logread'].includes(x));
     if (name.includes('logread') && !logs) return {ok:false,reason:'Router logs do not supply board, interface and route inventory'};
-    if (q.some(x=>['target','targets','alias','aliases'].includes(x)) && !name.includes('target')) return {ok:false,reason:'SSH target discovery requires target aliases'};
+    if (routerTargets(q) && !name.includes('target')) return {ok:false,reason:'SSH target discovery requires target aliases'};
     if (logs && !name.includes('logread')) return {ok:false,reason:'Requested router logs'};
     if (q.includes('client') && !name.includes('client')) return {ok:false,reason:'Router clients require the client-list operation'};
     if (!q.includes('client') && q.some(x=>['wifi','wireless'].includes(x)) && !name.includes('wifi')) return {ok:false,reason:'Router Wi-Fi requires wireless status'};
@@ -43,7 +53,7 @@ function intentFitness(q, name) {
     if (q.includes('package') && !name.includes('package')) return {ok:false,reason:'Requested router package query'};
     if (q.some(x=>['uci','config','configuration'].includes(x)) && !name.includes('uci')) return {ok:false,reason:'Router configuration requires a UCI operation'};
     if (name.includes('set') && !q.some(x=>['set','change','write','modify'].includes(x))) return {ok:false,reason:'Router configuration reads cannot select a write operation'};
-    if (!logs && !q.some(x=>['target','targets','alias','aliases','uci','config','configuration','wifi','wireless','client','package','ubus'].includes(x)) && (!name.includes('status') || name.includes('wifi')))
+    if (!logs && !routerTargets(q) && !q.some(x=>['uci','config','configuration','wifi','wireless','client','package','ubus'].includes(x)) && (!name.includes('status') || name.includes('wifi')))
       return {ok:false,reason:'Router inventory requires structured board/interface/route status; use a specific query for other operations'};
   }
   const hostInventory = q.includes('host') && !q.some(x=>['docker','ollama','router','openwrt','interface','route','gateway','file','logs','log','disk'].includes(x));
@@ -64,7 +74,7 @@ function intentFitness(q, name) {
     if (!q.some(x => ['change', 'restart', 'install', 'upgrade'].includes(x)) && name.some(x => ['action', 'execute', 'apply'].includes(x)))
       return { ok: false, reason: 'Router inspection cannot select a mutating action' };
   }
-  if (q.includes('ollama') || has('model', 'list')) {
+  if ((q.includes('ollama') && !isWebDiscovery(q.join(' '))) || has('model', 'list')) {
     if (name.includes('resource') && !name.includes('model')) return { ok: false, reason: 'MCP resource list is not model inventory' };
     if (q.includes('ollama') && !name.includes('ollama')) return { ok: false, reason: 'Ollama requires its own operation' };
   }
@@ -98,7 +108,7 @@ export function relevantDiscovery(query, tool) {
   const actualServer = String(tool.name ?? '').match(/^mcp__([a-z0-9]+)__/i)?.[1]?.toLowerCase();
   if (explicitServer && actualServer !== explicitServer) return { ok: false, score: 0, reason: `Wrong explicit MCP namespace: ${explicitServer}` };
   if (!q.length) return { ok: false, score: 0, reason: 'Specify a verb and object' };
-  const isMcpHealth = /\bmcp\b.*\b(health|status|connection|connectivity|service)|\b(health|status)\b.*\bmcp\b/.test(String(query ?? '').toLowerCase());
+  const isMcpHealth = isMcpHealthDiscovery(query);
   if (isMcpHealth) return /^(mcp_endpoint_health|mcp__[^_]+__(?:mcp_)?(?:endpoint_health|server_health|connection_health))$/.test(String(tool.name ?? '').toLowerCase())
     ? { ok: true, score: 1000, reason: 'Exact MCP endpoint health operation' }
     : { ok: false, score: 0, reason: 'MCP health requires endpoint handshake, not generic router/multicast/memory operation' };
@@ -106,13 +116,27 @@ export function relevantDiscovery(query, tool) {
     return { ok: false, score: 0, reason: 'Router query requires a router operation' };
   if (q.includes('host') && q.includes('cpu') && !name.some(x => ['host', 'system'].includes(x)))
     return { ok: false, score: 0, reason: 'Host CPU inventory cannot match persistent memory operations' };
+  if (q.includes('masscan') && !name.includes('masscan')) return {ok:false,score:0,reason:'Masscan query requires its own scanner, not Nmap or passive observation'};
   const fit = intentFitness(q, name);
   if (!fit.ok) return { ok: false, score: 0, reason: fit.reason };
   if (q.some(x => ['ollama','model'].includes(x)) && name.includes('resource') && !name.includes('model'))
     return { ok: false, score: 0, reason: 'MCP resource listing is not Ollama model inventory' };
   const destructive = name.filter(x => DANGEROUS.has(x));
   if (destructive.some(x => !q.includes(x))) return { ok: false, score: 0, reason: `Unrequested state-changing operation: ${destructive.join(', ')}` };
-  if (q.includes('ollama') && !name.includes('ollama')) return { ok: false, score: 0, reason: 'Ollama-specific operation not found' };
+  const web = isWebDiscovery(query);
+  if (web && q.includes('ollama') && name.includes('ollama')) return {ok:false,score:0,reason:'Documentation requires web evidence, not local model inventory'};
+  if (q.includes('ollama') && !web && !name.includes('ollama')) return { ok: false, score: 0, reason: 'Ollama-specific operation not found' };
+  if (web && q.some(x=>['documentation','docs','official'].includes(x))) {
+    const navigate = q.some(x=>['open','navigate','page','url'].includes(x));
+    const appropriate = navigate ? name.includes('browser') && name.includes('navigate') : (name.includes('searxng') || name.includes('web')) && name.includes('search');
+    return appropriate ? {ok:true,score:1000,reason:'Official documentation web operation'} : {ok:false,score:0,reason:'Documentation needs web search or explicit page navigation'};
+  }
+  const passiveObservation = !q.some(x=>['router','openwrt','anansi','arachne'].includes(x)) && q.includes('passive') && q.some(x=>['network','discovery','observation','observe','scan','capture','arp','mdns','ssdp','llmnr','broadcast','multicast'].includes(x));
+  if (passiveObservation) return name.includes('observe') && name.includes('broadcast') && name.includes('multicast')
+    ? {ok:true,score:1000,reason:'Passive host broadcast/multicast observation'}
+    : {ok:false,score:0,reason:'Passive network observation needs packet collection, not maps or active discovery'};
+  if (q.includes('browser') && !q.some(x=>['search','navigate','open','url','network','request','click','type','fill','resize','close','screenshot','tabs','pdf','console','evaluate'].includes(x)))
+    return name.includes('browser') && name.includes('snapshot') ? {ok:true,score:1000,reason:'Current browser page observation'} : {ok:false,score:0,reason:'Generic browser observation requires a page snapshot'};
   const match = word => name.includes(word) || (OPERATION_ALIASES[word] ?? []).some(x => name.includes(x));
   const nameHits = q.filter(match);
   const descHits = q.filter(x => desc.includes(x));
@@ -195,7 +219,8 @@ export class ProgressGuard {
   markAttempt(event) {
     if (event?.parentToolCallId) return;
     this.attempts++;
-    if (this.attempts > (this.options.maxCalls > 16 ? this.options.maxCalls - 8 : this.options.maxCalls)) this.trip(`Per-turn tool budget exhausted: ${this.options.maxCalls} attempted calls including rejected calls.`);
+    const reserve = this.options.settlementReserve ?? (this.options.maxCalls > 16 ? 8 : 0);
+    if (this.attempts > this.options.maxCalls - reserve) this.trip(`Per-turn tool budget exhausted: ${this.options.maxCalls} attempted calls including rejected calls.`);
   }
   trip(reason) { if (!this.hardStopped) { this.hardStopped = true; this.stopReason = reason; } }
   rejectEvent(event, reason, { attempted = false } = {}) {

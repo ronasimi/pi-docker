@@ -1,4 +1,4 @@
-refactor(pi): consolidate r24 on an immutable stock runtime
+feat(pi): add bounded Masscan discovery to the clean r24 runtime
 
 Pin a shared Pi 1.1.0 SDK and Web UI 0.100.0 dependency tree, with native
 MCP/search factories loaded through external extensions.
@@ -19,5 +19,14 @@ explicit filters and known references. Clarify environment and tool scope
 in the standing prompt; recognize router/OpenWrt synonyms and prefer
 explicit client, Wi-Fi and target requests over general status.
 
-Validation: 187 Node tests, 8 Python host tests and upstream integrity checks.
+Validation: 196 Node tests, 8 Python host tests and upstream integrity checks.
 Docker builds and live model/MCP checks remain deployment validation.
+
+Fix router-list, passive-listener, web documentation and browser discovery.
+Honor explicit call budgets, recover one textual tool plan through real
+SDK calls, and select ledger reports regardless of assessment word order.
+Make container bash a last resort without widening host-operation scope.
+
+Distinguish Masscan from Nmap and passive collection, support the massscan
+spelling, and expose the existing active-network opt-in through Compose
+without enabling it by default. Recognize explicit Masscan scan intent.

@@ -96,9 +96,9 @@ export default function atomicToolResults(pi) {
     // Single source of truth for a concluded infrastructure assessment.
     // Do not append corrections to unverified model prose; replace it with
     // deterministic executed-operation evidence and explicit limitations.
-    const userAskedAssessment = /(?:infrastructure|network|router|mcp|host|docker|ollama).*(?:assess|audit|validate|verify|report|diagnos)|\btask\s+1\s*[—–:-]/i.test(evidenceLedger.scope);
+    const userAskedAssessment = /(?=[\s\S]*\b(?:infrastructure|network|router|mcp|host|docker|ollama)\b)(?=[\s\S]*\b(?:assessment|assess|audit|validate|verify|report|diagnosis|diagnose)\b)|\btask\s+1\s*[—–:-]/i.test(evidenceLedger.scope);
     const modelReport = message.content?.some(x=>x.type === 'text' && /(?:technical\s+assessment|network\s+(?:and\s+agent\s+)?assessment|infrastructure\s+assessment|findings\s+report|\btask\s+completion\b|\bconfirmed\s+findings\b|\b\d+\s*\/\s*\d+\s*(?:tasks?|checks?)|\btasks?\s+(?:completed|passed)\s*:\s*\d+\s*\/\s*\d+|\b(?:security|system)\s+(?:and\s+network\s+)?assessment\b)/i.test(x.text ?? ''));
-    if (!userAskedAssessment || (!modelReport && !evidenceLedger.records.some(r => r.category))) return;
+    if (!userAskedAssessment || (!modelReport && !evidenceLedger.records.some(r => r.category) && !stableTools?.textualPlanRetrySpent(message.content))) return;
     const report = stableTools?.report() ?? evidenceLedger.report();
     return { message: { ...message,
       content: [{ type: 'text', text: report + '\n\n*Model-generated conclusions were withheld in favor of measured evidence; review underlying result references for further interpretation.*' }] } };

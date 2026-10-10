@@ -1,6 +1,6 @@
 # Atomic tool/results
 
-**Version 0.2.3 · external extension for stock Pi 1.1.0**
+**Version 0.2.5 · external extension for stock Pi 1.1.0**
 
 This extension owns bounded operation scheduling, authorization grants, selective result archives and evidence reporting. The separate native-services bridge uses Pi's public MCP and tool-search factories.
 

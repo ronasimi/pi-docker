@@ -234,6 +234,9 @@ export function createStableTools(pi, config, evidenceLedger = null) {
 
   pi.on('before_agent_start', event => {
     const prompt = typeof event?.prompt === 'string' ? event.prompt : '';
+    const requestedLimit = prompt.match(/\b(?:at most|no more than|maximum of)\s+(\d+)\s+tool calls?\b/i);
+    progress.options.maxCalls = Math.min(config.maxTurnCalls ?? 120, requestedLimit ? Math.max(1, Number(requestedLimit[1])) : Infinity);
+    progress.options.settlementReserve = requestedLimit ? 0 : undefined;
     activeRequest = {role:'user',content:[{type:'text',text:prompt},...(event?.images ?? [])],timestamp:Date.now()};
     scheduler.reset();
     // An operator flag alone cannot authorize network probes. A positive,
@@ -241,7 +244,7 @@ export function createStableTools(pi, config, evidenceLedger = null) {
     const passive = /(?:passive[- ]only|read[- ]only|non[- ]invasive|without scanning|do not scan|no active scanning)/i.test(prompt);
     browserTargets.clear();
     passiveOnly = passive;
-    userAuthorization = !passive && /(?:i (?:explicitly )?authoriz(?:e|ing)|you (?:are|have) (?:explicit )?permission|please (?:run|perform|conduct) (?:an? )?(?:active|arp|port|ping) (?:network )?(?:scan|sweep|probe)|actively scan)/i.test(prompt);
+    userAuthorization = !passive && /(?:i (?:explicitly )?authoriz(?:e|ing)|you (?:are|have) (?:explicit )?permission|please (?:run|perform|conduct) (?:an? )?(?:active|arp|port|ping|masscan|massscan) (?:network )?(?:scan|sweep|probe)|actively scan)/i.test(prompt);
     evidenceLedger?.reset(); evidenceLedger?.setScope(prompt); capability.reset();
     hardStopRecorded = false;
     repairs = 0; searchesSinceInvoke = 0; mustInvoke = null; pendingSearch = false; pendingSearchCallId = null; pendingSearchQuery = null; pendingBatch = []; pendingSearches.clear(); lastReadyQuery = ''; skips = 0; rejectedChoices.clear(); progress.reset(); evict(); });
@@ -300,6 +303,10 @@ export function createStableTools(pi, config, evidenceLedger = null) {
       repairs++;
       return {continue:true,entries:[{type:'custom_message',customType:'pi.atomic-empty-settlement-repair',display:false,content:'Your response contained only a control marker and no assessment. Continue the active user request using existing discovery grants and archived evidence. Do not repeat successful observations. Advance to an independent unfinished task or provide a measured partial report with explicit limitations.'}]};
     }
+    if (isTextualDiscoveryPlan(last.content) && /assess|investigat|\btask\s+1/i.test(evidenceLedger?.scope ?? '') && !/\b(?:explain|example|draft|write|describe)\b.{0,40}\b(?:tool|sequence|plan)\b/i.test(evidenceLedger.scope)) {
+      repairs++;
+      return {continue:true,entries:[{type:'custom_message',customType:'pi.atomic-tool-call-repair',display:false,content:'Your response listed tool calls as text; nothing in that list executed. Continue the assessment by emitting one real structured tool_search call for the next observation. Invoke only the exact discovered operation with schema-valid arguments. Do not print another proposed sequence or invent operation names.'}]};
+    }
     const name = textualCallTarget(last.content, [...grants.keys()].filter(name => registry().has(name) && grants.get(name) === toolHash(registry().get(name))));
     if (!name) return;
     repairs++;
@@ -317,6 +324,7 @@ export function createStableTools(pi, config, evidenceLedger = null) {
     // tool_search must never mutate the permanent tools/provider prefix.
     initializePermanentTools() { evict(); },
     userRequest() { return activeRequest; },
+    textualPlanRetrySpent(content) { return repairs > 0 && isTextualDiscoveryPlan(content); },
     canRepairSettlement(content) { return config.repairTextCalls && !repairs && isControlOnlyReply(content) && evidenceLedger?.records.some(r=>r.category) && /assess|investigat|\btask\s+1/i.test(evidenceLedger.scope); },
     restore,
     clear() { scheduler.reset(); browserTargets.clear(); grants.clear(); userAuthorization = false; hardStopRecorded = false; queue = []; repairs = 0; searchesSinceInvoke = 0; mustInvoke = null; pendingSearch = false; pendingSearchCallId = null; pendingSearchQuery = null; pendingBatch = []; pendingSearches.clear(); visibleSchemas = null; lastReadyQuery = ''; skips = 0; rejectedChoices.clear(); progress.reset(); capability.reset(); },
@@ -463,4 +471,11 @@ export function textualCallTarget(content, names) {
     if (text.startsWith('<tool_call>') && text.includes(name) && /[\{"(]/.test(text.slice(11))) return name;
     if ((text.startsWith(`call:${INVOKE_NAME}{`) || text.startsWith(`call:${INVOKE_NAME} {`)) && text.includes(name)) return name;
   }
+}
+
+// Recognize the logged small-model failure without interpreting its invented
+// arguments. This only requests one continuation; it never runs textual calls.
+export function isTextualDiscoveryPlan(content) {
+  const text = (content ?? []).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
+  return /^tool sequence to execute\b/i.test(text) && /^\s*\d+[.)]\s*tool_search\s*:/im.test(text);
 }

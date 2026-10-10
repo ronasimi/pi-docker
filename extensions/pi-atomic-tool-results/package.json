@@ -1,6 +1,6 @@
 {
   "name": "pi-atomic-tool-results",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "Conversation-scoped atomic tool-result storage and selective rehydration for Pi.",
   "type": "module",
   "license": "MIT",
