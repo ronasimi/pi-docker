@@ -1,5 +1,38 @@
 {
-  "defaultTools": ["read", "bash", "edit", "write", "tool_search"],
-  "extensions": [],
-  "packages": []
+  "defaultProvider": "ollama",
+  "defaultModel": "gemma4:e4b-it-qat-32k",
+  "defaultThinkingLevel": "medium",
+  "defaultTools": [
+    "read",
+    "bash",
+    "edit",
+    "write",
+    "tool_search"
+  ],
+  "extensions": [
+    "-builtin:mcp",
+    "-builtin:tool-search",
+    "-builtin:codemode",
+    "-builtin:llama.cpp",
+    "/opt/pi-extensions/pi-native-services",
+    "/opt/pi-extensions/pi-atomic-tool-results",
+    "!extensions/pi-atomic-tool-results/**",
+    "-extensions/pi-atomic-tool-results/index.js",
+    "-extensions/tool-search-default-limit.js"
+  ],
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 8192,
+    "keepRecentTokens": 4096
+  },
+  "cacheWarming": "streaming",
+  "retry": {
+    "enabled": true,
+    "maxRetries": 1,
+    "provider": {
+      "maxRetries": 0
+    }
+  },
+  "enableInstallTelemetry": false,
+  "enableAnalytics": false
 }

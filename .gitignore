@@ -8,7 +8,11 @@ data/web/*
 !data/web/.gitkeep
 **/node_modules/
 
-# Agent files stay local and outside version control.
-workspace/*
-workspace/.*
-!workspace/.gitkeep
+# Generated checks and source-replacement backups.
+__pycache__/
+*.pyc
+.clean-source-backups/
+.security-results/
+.env.*backup*
+workspace/
+data/

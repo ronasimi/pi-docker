@@ -1,0 +1,36 @@
+{
+  "name": "pi-atomic-tool-results",
+  "version": "0.2.3",
+  "description": "Conversation-scoped atomic tool-result storage and selective rehydration for Pi.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "tool-results",
+    "context",
+    "mcp"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "config/",
+    "scripts/",
+    "README.md",
+    "LICENSE",
+    "tests/"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:sdk": "PI_REQUIRE_SDK=1 node --test tests/sdk.integration.test.mjs",
+    "check": "node --check index.js && for f in lib/*.js; do node --check \"$f\"; done && node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

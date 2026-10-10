@@ -1,0 +1,5 @@
+# Development override for the clean r22 image; replace the configured extension in place.
+services:
+  pi:
+    volumes:
+      - ../pi-atomic-tool-results:/opt/pi-extensions/pi-atomic-tool-results:ro

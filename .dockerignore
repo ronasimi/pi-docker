@@ -5,6 +5,7 @@ README.md
 **/node_modules
 **/.cache
 data
-tests
 
+**/*.bak*
+**/__pycache__
 workspace

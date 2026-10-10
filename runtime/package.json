@@ -1,0 +1,14 @@
+{
+  "name": "pi-docker-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Unmodified pinned Pi and Web UI runtime; customization lives in external extensions.",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "pi-web-ui": "0.100.0"
+  }
+}

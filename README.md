@@ -1,124 +1,91 @@
-# Pi Docker — Pi 1.0 native MCP + Pi Web UI
+<div align="center">
 
-This repository runs `@earendil-works/pi-coding-agent` 1.0.0 with `pi-web-ui` 0.97.0. The Pi agent loop, MCP integration, tool search, and tool activation remain upstream Pi features, and the retired custom MCP orchestration layer is removed. One narrow build-time compatibility patch keeps the Web UI on the official Pi MCP/tool-search SDK factories and preserves deferred tools during settings replay. A tiny runtime extension normalizes an **omitted** `tool_search.limit` to `1` through Pi's official mutable `tool_call` hook. Explicit caller limits are unchanged. The compiled Pi package is no longer patched, avoiding brittle coupling to generated source text. There is no custom search/routing loop or MCP execution layer.
+# 🐇 Pi Docker
 
-## Runtime architecture
+**A local agent, a stock runtime, and a small tool surface.**
 
-The model starts with Pi's normal file/shell tools plus the built-in `tool_search` loader. When `limit` is omitted, the runtime guard sets it to one before execution; an explicit larger limit still requests a broader batch:
+`r24` · `Pi 1.1.0` · `Web UI 0.100.0` · `32K context`
 
-- `read`
-- `bash`
-- `edit`
-- `write`
-- `tool_search`
+[Quick start](#quick-start) · [Operations](docs/OPERATIONS.md) · [Development](docs/DEVELOPMENT.md)
 
-Pi's upstream `builtin:mcp` extension reads `config/mcp.json`. Pi CLI loads built-ins automatically; the Web UI SDK integration explicitly registers the same upstream factories. Every configured MCP server uses `exposure: "deferred"`, so MCP schemas remain outside the normal active tool set until Pi's built-in discovery loads a matching tool.
+</div>
 
-The MCP servers own capability boundaries, target authorization, input bounds, tool descriptions, aliases, overlap metadata, and result handling. `APPEND_SYSTEM.md` contains compact behavioral/evidence guidance, including the distinction between named skills and deferred tool discovery and the rule that container network interfaces never substitute for host physical-interface state.
+Pi Docker runs the stock Pi SDK and Web UI with external extensions for bounded discovery, scheduling and durable evidence. Ollama provides inference; the separate MCP gateway provides host, browser, account and network capabilities.
 
-## Persistent state
+## At a glance
 
-Docker identity and state paths are intentionally unchanged from the earlier deployment:
+| Feature | Behavior |
+| :--- | :--- |
+| Stock runtime | One locked SDK shared by CLI and Web UI; upstream files remain read-only |
+| Small tool surface | Eight permanent declarations; specialized operations load on demand |
+| Durable evidence | Redacted archives, selective retrieval and execution provenance |
+| Bounded context | 32,768-token model cap; 8,192-token compaction reserve |
+| Model trials | Qwen preparation, probes, guarded activation and restore |
+| Deployment visibility | Loaded release, extension version and source digest |
 
-- container: `pi`
-- image: `local/pi-web-ui:latest`
-- Web UI: `127.0.0.1:${PI_WEB_PORT:-8787}`
-- Pi state/history: `./data/pi:/home/pi/.pi`
-- Web UI state: `./data/web:/home/pi/.pi-web`
-- workspace: `${HOME}/Projects:/workspace`
+## Quick start
 
-Upgrading/recreating the container therefore preserves existing sessions, model settings, Web UI history/preferences, credentials, and package state stored in those bind mounts.
-
-## Upgrade from the bounded-gate deployment
-
-Run:
+Start the Ollama and MCP projects first, then:
 
 ```bash
-./scripts/upgrade-stock-pi-1.0.sh
+cd ~/Projects/pi-docker
+bash scripts/init.sh
 ```
 
-The script validates inputs and builds the image, then stops Pi and saves the current `.env`, Pi settings, and Web UI client state under:
+Open **http://127.0.0.1:8787**. The initializer creates `.env`, state directories, the dedicated workspace and `ai-local` when needed, builds the image, and validates it.
 
-```text
-~/.local/state/pi-stock-upgrade.<unique-id>/
+Existing `.env`, `data/` and `workspace/` hold local configuration and state. Set `PI_WEB_TOKEN` in `.env` if needed. The supplied stack installer replaces source while preserving those paths and Git history.
+
+## How the projects fit
+
+```mermaid
+flowchart TD
+  Pi["Pi · agent and Web UI"] --> Ollama["Ollama · inference"]
+  Pi --> MCP["MCP gateway · domain tools"]
+  Pi --> Workspace["Shared workspace"]
+  MCP --> Workspace
+  MCP --> Host["Host helper · physical network"]
 ```
 
-It then performs a narrow one-time settings migration:
+Pi reaches Ollama through `host.docker.internal:11434`. MCP services use the external Docker network `ai-local`. Set the gateway's `MCP_WORKSPACE_PATH` to this repo's `workspace` so generated files are visible to both projects.
 
-- sets startup tools to `read`, `bash`, `edit`, `write`, `tool_search`
-- restores the built-in MCP/tool-search extensions if the old gate disabled them
-- removes the retired `pi-mcp-gate` wiring
-- removes the retired `pi-mcp-adapter` package so `builtin:mcp` is the sole MCP owner
-- preserves unrelated packages, resource filters, model settings, permission presets, and UI preferences
-- disables optional Web UI tools using its supported persisted settings
-- seeds the same policy for fresh installations
-- pins Pi to `1.0.0` and Pi Web UI to `0.97.0`
-- rebuilds/recreates only the `pi` container
+## Tools
 
-The migration is host-side deployment logic; it is not loaded into the Pi runtime. Start a new conversation after deployment. Existing session history is retained, including any previous tool messages. To roll back settings, stop Pi, restore the backed-up files to their original paths and recreate Pi from the previous source/image.
+| Permanent tools | Purpose |
+| :--- | :--- |
+| `read`, `edit`, `write` | Workspace files |
+| `bash` | Pi-container workspace shell |
+| `tool_search`, `tool_invoke` | Discover and execute authorized operations |
+| `result_get`, `result_list` | Retrieve archived evidence and locate references |
 
-## Native MCP configuration
+`result_search`, `atomic_batch`, `ollama_api_inventory` and `mcp_endpoint_health` are deferred operations. Discover them when needed. `result_search` searches earlier result content; `result_get` reads a known archive reference. Security's `read_security_result` reads server-side JSON artifacts and uses a separate path boundary.
 
-`config/mcp.json` configures these existing services with deferred exposure:
-
-| Domain | Endpoint |
-| --- | --- |
-| SearXNG | `http://mcp-searxng:8888/mcp/` |
-| Playwright | `http://mcp-gateway:8931/mcp` |
-| Memory | `http://mcp-gateway:8932/mcp` |
-| System | `http://mcp-system:8933/mcp` |
-| Google | `http://mcp-google:8934/mcp` |
-| Security | `http://mcp-security:8935/mcp` |
-
-The corresponding services must share the external Docker network `ai-local`.
-
-## Common commands
+## Daily commands
 
 ```bash
-./scripts/init.sh
-./scripts/status.sh
-./scripts/logs.sh
-./scripts/down.sh
+bash scripts/status.sh
+bash scripts/logs.sh
+bash scripts/sync-models.sh
+bash scripts/validate-image.sh
 ```
 
-To resynchronize the local Ollama model catalog:
+In a Pi session, `/atomic-version` displays the loaded release and source digest; `/atomic-report` displays the assessment ledger.
 
-```bash
-./scripts/sync-models.sh
-```
+## Runtime pins
 
-## Validation
+| Component | Version |
+| :--- | :--- |
+| Pi coding agent | 1.1.0 |
+| Pi Web UI | 0.100.0 |
+| Atomic tool/results | 0.2.3 |
+| Native services bridge | 1.0.0 |
 
-After the migration, `scripts/status.sh` reports the native MCP endpoints, Pi model catalog, `APPEND_SYSTEM.md`, and the stock tool policy. The expected startup tool set is:
+`runtime/package-lock.json` controls installation through `npm ci`. Old version variables in `.env` do not change these pins. The native bridge uses public SDK factories; custom code stays outside installed upstream packages.
 
-```text
-read, bash, edit, write, tool_search
-```
+## Verification
 
-Use Pi's `/mcp` UI to inspect native MCP connection status and `/tools`/configuration surfaces supplied by upstream Pi as appropriate.
+The image checks SDK compatibility, fixed provider declarations, Web UI settings replay, native MCP fixtures, Qwen probes and upstream integrity during its build. Run `bash scripts/check.sh` inside the Pi container for the full source suite. See [development](docs/DEVELOPMENT.md) for local dependency paths and validation limits.
 
-## Offline integration checks
+[Operations and troubleshooting →](docs/OPERATIONS.md)
 
-`python3 -m unittest discover -s tests -p '*test.py'` checks state preservation and idempotence.
-
-After installing the pinned upstream packages in an isolated directory, run:
-
-```bash
-node tests/native-mcp-smoke.mjs /path/to/pi-coding-agent /path/to/pi-web-ui /path/to/mcp-gateway
-```
-
-Run `scripts/configure-web-ui-native-mcp.mjs /path/to/pi-web-ui` once on the pristine Web UI package first. The smoke test connects all three owned MCP servers over stdio, checks that all owned tools remain deferred, verifies the omitted-limit one-result regression plus explicit bounded searches, every canonical tool name, and the failed run’s exact discovery query, and replays the actual Web UI settings function. It makes no model requests or network scans.
-
-The Web UI compatibility adjustment is pinned to 0.97.0. `config/extensions/tool-search-default-limit.js` is the sole `tool_search` default-limit compatibility layer: the updater mounts only that file into Pi's standard global extension directory, preserving any other user extensions, and the post-deploy verifier exercises both omitted and explicit limits. No generated Pi SDK files are modified.
-
-## 2026-10-04 recon completion update
-
-Topology preserves partial results when capture is unavailable. Wireless units are explicit. Host observation artifacts feed map input_paths directly. mDNS subnet discovery returns compact report rows and keeps full raw DNS audit evidence in a separate observation artifact to avoid context blowups. Visible mDNS tables copy host/IP/count strings exactly; full IPv6 addresses are never shortened with ellipses. Pi builds now verify the ESM SDK import before deployment. See the bundle RECON-COMPLETION-FIXES.md for validation and limits.
-
-## Dedicated agent workspace
-
-Pi uses `pi-docker/workspace` as `/workspace`. The complete installer aligns the MCP workspace and retains files in the old location. See `docs/WORKSPACE-UPDATE.md`.
-
-## Network recon skill
-
-The bundled native Pi skill is mounted from `config/skills/network-recon`. Prefer Pi’s canonical `/skill:network-recon ...` invocation so the skill is loaded before the model begins deferred-tool discovery. For plain-language requests that explicitly name the skill, the model must read its skill path before MCP discovery; the skill name is not itself a `tool_search` query. `get_host_interface_info` is an operation label until `tool_search` returns an exact `mcp__...` tool name; auto-selection calls omit the `interface` field rather than passing `"{}"`. For host/LAN work, the skill requires targeted discovery of `get_host_interface_info {}` and forbids using Security-container `eth0` or an interface name merely listed in an error. It uses deferred Security MCP tools, tracks all stages and saved observations, and reports evidence limitations.
+Discovery results remain archived, but default `result_list` and `result_search` exclude `tool_search`. Use an explicit `tool: "tool_search"` filter for diagnostics; known refs remain readable through `result_get`.

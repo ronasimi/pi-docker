@@ -1,0 +1,23 @@
+refactor(pi): consolidate r24 on an immutable stock runtime
+
+Pin a shared Pi 1.1.0 SDK and Web UI 0.100.0 dependency tree, with native
+MCP/search factories loaded through external extensions.
+
+Keep eight provider tools fixed across CLI and Web UI replay. Preserve
+independent operation grants, bounded discovery, durable redacted evidence,
+read provenance, batch validation and measured partial assessment reports.
+
+Retain 32K model profiles and guarded Qwen trials. Record the loaded runtime
+fingerprint, recover one premature control-only settlement, and execute
+startup policy correctly through symlinked script entrypoints.
+
+Rename revision-specific suites, add one check entrypoint, and consolidate
+setup, operations and development guidance around the current runtime.
+
+Hide discovery results from default archive list/search while preserving
+explicit filters and known references. Clarify environment and tool scope
+in the standing prompt; recognize router/OpenWrt synonyms and prefer
+explicit client, Wi-Fi and target requests over general status.
+
+Validation: 187 Node tests, 8 Python host tests and upstream integrity checks.
+Docker builds and live model/MCP checks remain deployment validation.

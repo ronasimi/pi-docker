@@ -1,187 +1,96 @@
-import fs from 'node:fs/promises';
+#!/usr/bin/env node
 import path from 'node:path';
+import { readJson, writeJson, integer, isMain } from './config-common.mjs';
+import { modelIdentity, configuredContext, nativeContext, cappedModel, capConfiguration, CONTEXT_CAP } from './model-policy.mjs';
+import { configureAliases } from './configure-ollama-32k.mjs';
 
-const baseUrl = (process.env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434').replace(/\/$/, '');
-const outputPath = process.env.PI_MODELS_FILE || '/home/pi/.pi/agent/models.json';
-const overridesPath = process.env.PI_MODELS_OVERRIDES || '/etc/pi/models-overrides.json';
-const contextCap = Math.max(2048, Number(process.env.PI_OLLAMA_CONTEXT_CAP || 65536));
-const maxTokensDefault = Math.max(256, Number(process.env.PI_OLLAMA_MAX_TOKENS || 4096));
-const retrySeconds = Math.max(0, Number(process.env.PI_OLLAMA_DISCOVERY_RETRY_SECONDS || 30));
-const hideAliasSources = !['0', 'false', 'no'].includes(String(process.env.PI_OLLAMA_HIDE_ALIAS_SOURCES || 'true').toLowerCase());
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
-  });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText} from ${url}`);
-  }
-  return response.json();
-}
-
-async function getTagsWithRetry() {
+export async function syncModels({ env = process.env, fetchImpl = fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  const baseUrl = (env.OLLAMA_BASE_URL || 'http://host.docker.internal:11434').replace(/\/$/, '');
+  const output = env.PI_MODELS_FILE || path.join(env.PI_CODING_AGENT_DIR || '/home/pi/.pi/agent', 'models.json');
+  const cap = integer(env.PI_MODEL_CONTEXT_CAP ?? env.PI_OLLAMA_CONTEXT_CAP, CONTEXT_CAP, 2048, CONTEXT_CAP, 'context cap');
+  const maxOutput = integer(env.PI_OLLAMA_MAX_TOKENS, 4096, 256, 8192, 'Ollama output limit');
+  const retrySeconds = integer(env.PI_OLLAMA_DISCOVERY_RETRY_SECONDS, 30, 0, 120, 'discovery retry seconds');
+  const old = await readJson(output);
+  const fallback = await readJson(env.PI_MODELS_FALLBACK || '/etc/pi/models-fallback.json');
+  const config = old.providers ? old : { ...fallback, ...old, providers: { ...fallback.providers, ...old.providers } };
+  const overrides = await readJson(env.PI_MODELS_OVERRIDES || '/etc/pi/models-overrides.json');
+  const request = async (endpoint, body) => {
+    const response = await fetchImpl(`${baseUrl}/api/${endpoint}`, {
+      ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`Ollama ${endpoint}: HTTP ${response.status}`);
+    const data = await response.json(); if (data.error) throw new Error(`Ollama ${endpoint}: ${data.error}`);
+    return data;
+  };
+  let tags, error;
   const deadline = Date.now() + retrySeconds * 1000;
-  let lastError;
   do {
-    try {
-      return await fetchJson(`${baseUrl}/api/tags`);
-    } catch (error) {
-      lastError = error;
-      if (Date.now() >= deadline) break;
-      await sleep(1500);
-    }
+    try { tags = await request('tags'); break; }
+    catch (cause) { error = cause; if (Date.now() >= deadline) break; await sleep(1500); }
   } while (true);
-  throw lastError;
-}
-
-async function loadOverrides() {
-  try {
-    return JSON.parse(await fs.readFile(overridesPath, 'utf8'));
-  } catch (error) {
-    if (error?.code === 'ENOENT') return {};
-    throw error;
+  if (tags && env.PI_CREATE_32K_ALIASES === 'true') {
+    await configureAliases({ baseUrl, fetchImpl, timeoutMs: 30000 });
+    tags = await request('tags');
   }
-}
-
-function findContextLength(model, show) {
-  // Ollama's configured allocation takes precedence over the architecture's
-  // training limit (security-agent:7b is configured with 16384, not 32768).
-  const configured = Number(/^num_ctx\s+(\d+)/m.exec(show?.parameters || '')?.[1] || 0);
-  if (configured > 0) return configured;
-  const direct = Number(model?.details?.context_length || show?.details?.context_length || 0);
-  if (Number.isFinite(direct) && direct > 0) return direct;
-
-  for (const [key, value] of Object.entries(show?.model_info || {})) {
-    if (key.endsWith('.context_length') || key === 'context_length') {
-      const n = Number(value);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
-  }
-  return 32768;
-}
-
-async function enrich(model) {
-  let show = {};
-  if (!Array.isArray(model?.capabilities) || !model?.details?.context_length) {
-    try {
-      show = await fetchJson(`${baseUrl}/api/show`, {
-        method: 'POST',
-        body: JSON.stringify({ model: model.name }),
-      });
-    } catch (error) {
-      console.error(`[pi] Warning: could not inspect ${model.name}: ${error.message}`);
-    }
-  }
-
-  const capabilities = Array.isArray(model?.capabilities)
-    ? model.capabilities
-    : (Array.isArray(show?.capabilities) ? show.capabilities : []);
-
-  const nativeContext = findContextLength(model, show);
-  const contextWindow = model.name.endsWith('-64k')
-    ? Math.min(65536, contextCap)
-    : Math.min(nativeContext, contextCap);
-
-  const input = ['text'];
-  if (capabilities.includes('vision')) input.push('image');
-
-  return {
-    id: model.name,
-    name: model.name,
-    reasoning: capabilities.includes('thinking'),
-    input,
-    contextWindow,
-    maxTokens: Math.min(maxTokensDefault, Math.max(256, contextWindow - 256)),
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  };
-}
-
-async function main() {
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  const overrides = await loadOverrides();
-
-  let tags;
-  try {
-    tags = await getTagsWithRetry();
-  } catch (error) {
-    try {
-      const cached = JSON.parse(await fs.readFile(outputPath, 'utf8'));
-      let changed = false;
-      for (const model of cached.providers?.ollama?.models ?? []) {
-        if (/white[-_]?rabbit[-_]?neo|^security-agent(?::|$)/i.test(model.id) && !model.reasoning) {
-          model.reasoning = true;
-          model.compat = { ...model.compat, supportsReasoningEffort: false };
-          changed = true;
-        }
+  let discovered = [];
+  if (tags) {
+    const verified = new Map();
+    for (const tag of tags.models || []) {
+      if (!tag.name) continue;
+      let show;
+      try { show = await request('show', { model: tag.name }); }
+      catch {
+        const cached = config.providers?.ollama?.models?.find(m => m.id === tag.name);
+        if (cached) discovered.push(cappedModel(cached, cap, maxOutput));
+        console.error(`[pi] Could not inspect ${tag.name}; ${cached ? 'using cached metadata' : 'omitting until inspection succeeds'}`);
+        continue;
       }
-      if (changed) {
-        await fs.writeFile(`${outputPath}.tmp`, JSON.stringify(cached,null,2)+'\n', {mode:0o600});
-        await fs.rename(`${outputPath}.tmp`,outputPath);
-      }
-      console.error(`[pi] Ollama discovery failed (${error.message}); keeping existing ${outputPath}`);
-      return;
-    } catch {
-      throw new Error(`Ollama discovery failed and no existing models.json is available: ${error.message}`);
+      const capabilities = show.capabilities || tag.capabilities || [];
+      if (!capabilities.includes('completion')) continue;
+      const nativeThinking = Array.isArray(show.thinking?.values)
+        ? show.thinking.values.some(value => value === true || typeof value === 'string')
+        : capabilities.includes('thinking');
+      const contextWindow = Math.min(cap, configuredContext(show) || nativeContext(show));
+      const previous = config.providers?.ollama?.models?.find(m => m.id === tag.name) || {};
+      const override = overrides.models?.[tag.name] || overrides.models?.[modelIdentity(tag.name)] || overrides[tag.name] || {};
+      const model = cappedModel({
+        ...previous, id: tag.name, name: tag.name, reasoning: nativeThinking,
+        input: capabilities.includes('vision') ? ['text', 'image'] : ['text'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        ...override, contextWindow, maxTokens: override.maxTokens || maxOutput,
+        compat: { ...previous.compat, ...override.compat, supportsDeveloperRole: false, supportsReasoningEffort: nativeThinking },
+      }, cap, maxOutput);
+      if (/white[-_]?rabbit[-_]?neo|^security-agent(?::|$)/i.test(tag.name)) model.reasoning = true;
+      model.name = `${(override.name || modelIdentity(tag.name)).replace(/\s*\[\d+K\]$/i, '')} [${Math.round(model.contextWindow / 1024)}K]`;
+      discovered.push(model);
+      if (configuredContext(show) === CONTEXT_CAP && /-32k(?::[^/]+)?$/i.test(tag.name)) verified.set(modelIdentity(tag.name), tag.name);
     }
-  }
-
-  const tagModels = (tags.models || []).filter(model => model?.name);
-  const names = new Set(tagModels.map(model => model.name));
-  const visibleTagModels = hideAliasSources
-    ? tagModels.filter(model => !names.has(`${model.name}-64k`))
-    : tagModels;
-
-  const discovered = [];
-  for (const model of visibleTagModels) {
-    const detected = await enrich(model);
-    const override = overrides?.models?.[model.name] || overrides?.[model.name] || {};
-    const merged = { ...detected, ...override, id: model.name };
-    if (/white[-_]?rabbit[-_]?neo|^security-agent(?::|$)/i.test(model.name)) {
-      merged.reasoning = true;
-      merged.compat = { ...override.compat, supportsReasoningEffort: detected.reasoning };
-      console.error(`[pi] ${model.name}: ${detected.reasoning ? 'native thinking supported' : 'prompted reasoning; native Ollama thinking unsupported'}`);
+    const hide = !['0', 'false', 'no'].includes(String(env.PI_OLLAMA_HIDE_ALIAS_SOURCES ?? 'true').toLowerCase());
+    const mapping = {};
+    for (const model of discovered) { const target = verified.get(modelIdentity(model.id)); if (target) mapping[model.id] = target; }
+    discovered = discovered.filter(m => !hide || !verified.has(modelIdentity(m.id)) || verified.get(modelIdentity(m.id)) === m.id);
+    if (!discovered.length) throw new Error('Ollama returned no inspectable completion models; retained catalog was not replaced');
+    discovered.sort((a, b) => a.id.localeCompare(b.id));
+    const previous = config.providers?.ollama || {};
+    config.providers ??= {};
+    config.providers.ollama = {
+      ...previous, baseUrl: `${baseUrl}/v1`, api: 'openai-completions', apiKey: previous.apiKey || 'ollama',
+      compat: { ...previous.compat, supportsDeveloperRole: false }, models: discovered,
+    };
+    for (const m of discovered) if (config.providers.ollama.modelOverrides?.[m.id]) {
+      const projectOverride = overrides.models?.[m.id] || overrides.models?.[modelIdentity(m.id)] || overrides[m.id] || {};
+      Object.assign(config.providers.ollama.modelOverrides[m.id], projectOverride, { contextWindow: m.contextWindow, maxTokens: m.maxTokens, name: m.name });
     }
-    discovered.push(merged);
+    await writeJson(path.join(path.dirname(output), 'model-aliases-32k.json'), { version: 1, contextWindow: cap, aliases: mapping });
+  } else {
+    if (!config.providers?.ollama?.models?.length) throw new Error(`Ollama unavailable and no fallback catalog: ${error.message}`);
+    console.error('[pi] Ollama unavailable; preserving all providers and capping the cached catalog.');
   }
-
-  discovered.sort((a, b) => {
-    const aAlias = a.id.endsWith('-64k') ? 0 : 1;
-    const bAlias = b.id.endsWith('-64k') ? 0 : 1;
-    return aAlias - bAlias || a.id.localeCompare(b.id);
-  });
-  if (discovered.length === 0) {
-    throw new Error('Ollama returned no installed models');
-  }
-
-  const config = {
-    providers: {
-      ollama: {
-        baseUrl: `${baseUrl}/v1`,
-        api: 'openai-completions',
-        apiKey: 'ollama',
-        compat: {
-          supportsDeveloperRole: false,
-          supportsReasoningEffort: true,
-        },
-        models: discovered,
-      },
-    },
-  };
-
-  const tmp = `${outputPath}.tmp`;
-  await fs.writeFile(tmp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
-  await fs.rename(tmp, outputPath);
-
-  console.error(`[pi] Discovered ${discovered.length} Ollama model(s):`);
-  for (const model of discovered) {
-    console.error(`[pi]   ${model.id} ctx=${model.contextWindow} reasoning=${model.reasoning} input=${model.input.join(',')}`);
-  }
+  const result = capConfiguration(config, [], cap);
+  await writeJson(output, result);
+  console.error(`[pi] Catalog synchronized: ${result.providers.ollama.models.length} Ollama chat models, context <= ${cap}`);
+  return result;
 }
 
-main().catch(error => {
-  console.error(`[pi] Model discovery failed: ${error.stack || error.message}`);
-  process.exit(1);
-});
+if (isMain(import.meta.url)) syncModels().catch(error => { console.error(`[pi] ${error.message}`); process.exitCode = 1; });

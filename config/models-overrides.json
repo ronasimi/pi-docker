@@ -1,33 +1,89 @@
 {
   "models": {
-    "gemma4:e2b-it-qat-64k": {
-      "name": "Gemma 4 E2B QAT 64K",
-      "reasoning": true,
+    "gemma4:e2b-it-qat-32k": {
+      "name": "Gemma 4 E2B QAT 32K",
       "input": [
         "text",
         "image"
       ],
-      "contextWindow": 65536,
       "maxTokens": 4096
     },
-    "gemma4:e4b-it-qat-64k": {
-      "name": "Gemma 4 E4B QAT 64K",
-      "reasoning": true,
+    "gemma4:e4b-it-qat-32k": {
+      "name": "Gemma 4 E4B QAT 32K",
       "input": [
         "text",
         "image"
       ],
-      "contextWindow": 65536,
       "maxTokens": 4096
     },
     "security-agent:7b": {
       "name": "WhiteRabbitNeo V3 7B",
-      "reasoning": true,
       "input": [
         "text"
       ],
-      "contextWindow": 16384,
       "maxTokens": 4096
+    },
+    "qwen3.5:4b-32k": {
+      "name": "Qwen 3.5 4B [32K]",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 32768,
+      "maxTokens": 4096,
+      "compat": {
+        "thinkingFormat": "openai",
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsStrictMode": false,
+        "maxTokensField": "max_tokens"
+      },
+      "thinkingLevelMap": {
+        "off": "none",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": null,
+        "max": null
+      },
+      "samplingParams": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "presence_penalty": 0
+      }
+    },
+    "tobestyledintro/qwen3.8-9b-distill:latest-32k": {
+      "name": "Qwen 3.8 Distill 9B Q4_K_M [32K]",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 32768,
+      "maxTokens": 4096,
+      "compat": {
+        "thinkingFormat": "openai",
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsStrictMode": false,
+        "maxTokensField": "max_tokens"
+      },
+      "thinkingLevelMap": {
+        "off": "none",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": null,
+        "max": null
+      },
+      "samplingParams": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "presence_penalty": 0
+      }
     }
   }
 }

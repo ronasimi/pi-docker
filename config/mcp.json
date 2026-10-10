@@ -3,19 +3,14 @@
     "searxng": {
       "url": "http://mcp-searxng:8888/mcp/",
       "exposure": "deferred",
-      "description": "Public web search for current information, news, URLs, and sources. Operational retrieval capability: search.",
-      "timeout": 30.0,
-      "toolExposure": {
-        "engine_info": "hidden",
-        "autocomplete": "hidden",
-        "search": "deferred"
-      }
+      "enabled": true,
+      "description": "Search current public information and official sources on the web."
     },
     "playwright": {
       "url": "http://mcp-gateway:8931/mcp",
       "exposure": "deferred",
-      "description": "Live browser navigation, page snapshots, and page actions for reading or interacting with known URLs.",
-      "timeout": 60.0,
+      "enabled": true,
+      "description": "Navigate web pages and inspect browser snapshots, links and page content.",
       "toolExposure": {
         "browser_close": "hidden"
       }
@@ -23,31 +18,27 @@
     "memory": {
       "url": "http://mcp-gateway:8932/mcp",
       "exposure": "deferred",
-      "description": "Knowledge graph memory. Retrieval capability: search_nodes; use targeted entity operations for reads and writes.",
-      "timeout": 30.0,
-      "toolExposure": {
-        "read_graph": "hidden",
-        "search_nodes": "deferred"
-      }
+      "enabled": true,
+      "description": "Search and store durable project facts and task memory."
     },
     "system": {
       "url": "http://mcp-system:8933/mcp",
       "exposure": "deferred",
-      "description": "System utilities.",
-      "timeout": 120.0
+      "enabled": true,
+      "description": "Inspect and manage Docker, host files, DNS and the Anansi/Arachne OpenWrt routers; process images, PDFs and Office files."
     },
     "google": {
       "url": "http://mcp-google:8934/mcp",
       "exposure": "deferred",
-      "description": "Google Workspace.",
-      "timeout": 120.0,
-      "type": "http"
+      "enabled": true,
+      "description": "Access Gmail, Calendar and Drive using server-side OAuth credentials."
     },
     "security": {
       "url": "http://mcp-security:8935/mcp",
       "exposure": "deferred",
-      "description": "Security assessment.",
-      "timeout": 330.0
+      "enabled": true,
+      "description": "Perform authorized network reconnaissance, mDNS discovery, wireless assessment, topology mapping and bounded security checks."
     }
-  }
+  },
+  "autoEnableCodemode": false
 }

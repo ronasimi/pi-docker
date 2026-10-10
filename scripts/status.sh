@@ -59,5 +59,5 @@ docker compose exec -T pi bash -lc 'test -r "$PI_CODING_AGENT_DIR/APPEND_SYSTEM.
 echo
 echo '== Native MCP configuration =='
 docker compose exec -T pi jq -r '.mcpServers | to_entries[] | "\(.key): exposure=\(.value.exposure // "codemode") url=\(.value.url // "stdio")"' /home/pi/.pi/agent/mcp.json 2>/dev/null || true
-echo 'Expected startup tools: read, bash, edit, write, tool_search'
+echo 'Expected startup tools: read, bash, edit, write, tool_search, tool_invoke, result_get, result_list'
 docker compose exec -T pi jq '{defaultTools, extensions}' /home/pi/.pi/agent/settings.json 2>/dev/null || true

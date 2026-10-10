@@ -10,14 +10,14 @@
       },
       "models": [
         {
-          "id": "gemma4:e2b-it-qat-64k",
-          "name": "Gemma 4 E2B QAT 64K",
+          "id": "gemma4:e2b-it-qat-32k",
+          "name": "Gemma 4 E2B QAT 32K",
           "reasoning": true,
           "input": [
             "text",
             "image"
           ],
-          "contextWindow": 65536,
+          "contextWindow": 32768,
           "maxTokens": 4096,
           "cost": {
             "input": 0,
@@ -27,14 +27,14 @@
           }
         },
         {
-          "id": "gemma4:e4b-it-qat-64k",
-          "name": "Gemma 4 E4B QAT 64K",
+          "id": "gemma4:e4b-it-qat-32k",
+          "name": "Gemma 4 E4B QAT 32K",
           "reasoning": true,
           "input": [
             "text",
             "image"
           ],
-          "contextWindow": 65536,
+          "contextWindow": 32768,
           "maxTokens": 4096,
           "cost": {
             "input": 0,
@@ -50,7 +50,7 @@
           "input": [
             "text"
           ],
-          "contextWindow": 16384,
+          "contextWindow": 32768,
           "maxTokens": 4096,
           "compat": {
             "supportsReasoningEffort": false
