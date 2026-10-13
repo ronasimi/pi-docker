@@ -352,13 +352,19 @@ export function createStableTools(pi, config, evidenceLedger = null) {
       const rejected = [], directMatches = [];
       const native = [...new Set(loaded)];
       for (const name of native) if (DIRECT_RESULTS.has(name)) directMatches.push(name);
-      const findCandidates = query => [...registered.values()].filter(t => SEARCHABLE.has(t.exposure) && !DIRECT_RESULTS.has(t.name) && !rejectedChoices.has(t.name))
+      const findMatches = query => [...registered.values()].filter(t => SEARCHABLE.has(t.exposure) && !DIRECT_RESULTS.has(t.name) && !rejectedChoices.has(t.name))
         .map(t => ({ tool: t, fit: relevantDiscovery(query, t) }))
-        .filter(({tool, fit}) => fit.ok && !authorizedRisk(tool.name, {}))
+        .filter(({fit}) => fit.ok)
         .sort((a,b) => b.fit.score - a.fit.score || a.tool.name.localeCompare(b.tool.name));
       const directIntent = /^(?:result[\s_-]*(?:get|list)|(?:get|list)[\s_-]+(?:archived[\s_-]+)?results?)(?:\s|$)/i.test(String(event.input?.query ?? '').trim());
       if (directIntent && !directMatches.length) directMatches.push('result_get', 'result_list');
-      let candidates = directIntent ? [] : findCandidates(event.input?.query), matchedQuery = event.input?.query;
+      const matches = directIntent ? [] : findMatches(event.input?.query);
+      const candidates = matches.filter(({tool}) => !authorizedRisk(tool.name, {}));
+      const deniedExact = matches.find(({tool, fit}) => fit.score >= 10000 && authorizedRisk(tool.name, {}));
+      const deniedFallback = !candidates.length && matches.find(({tool}) => authorizedRisk(tool.name, {}));
+      const denied = deniedExact ?? deniedFallback;
+      const deniedReason = denied && authorizedRisk(denied.tool.name, {});
+      const matchedQuery = event.input?.query;
       // Each concurrent search is resolved independently and grants one schema.
       const coalesced = 0;
       // Pi's native fuzzy discovery is useful for ranking; where it supplies an
@@ -374,13 +380,15 @@ export function createStableTools(pi, config, evidenceLedger = null) {
       // Native fuzzy search may report no match even when a registered Pi-owned
       // deferred capability satisfies the exact intent. Validate the registry
       // match independently before yielding a failed native discovery.
-      const best = directIntent || capability.unavailable(event.input?.query) ? null : candidates[0] ?? null;
-      const capabilityState = capability.discovered(event.input?.query, best?.tool.name ?? null);
+      const best = directIntent || deniedExact || capability.unavailable(event.input?.query) ? null : candidates[0] ?? null;
+      const capabilityState = deniedReason && !best
+        ? capability.blocked(event.input?.query, deniedReason)
+        : capability.discovered(event.input?.query, best?.tool.name ?? null);
       const selected = best ? [{ name: best.tool.name, description: best.tool.description, parameters: best.tool.parameters, hash: toolHash(best.tool) }] : [];
-      progress.searchCompleted(event.input?.query, { rejected: (rejected.length > 0 || directMatches.length > 0) && !selected.length });
+      progress.searchCompleted(event.input?.query, { rejected: (deniedReason || rejected.length > 0 || directMatches.length > 0) && !selected.length });
       // Empty, unsafe or failed discovery must not invalidate existing leases.
       if (!selected.length) {
-        const marker = { discovery: capabilityState?.state === 'unavailable' ? 'unavailable' : directMatches.length ? 'direct' : rejected.length ? 'irrelevant' : event.isError ? 'failed' : 'empty', ...(capabilityState ? { capability: capabilityState.id, attempts: capabilityState.misses } : {}), ...(rejected.length ? { rejected } : {}), ...(directMatches.length ? { direct: directMatches } : {}), buffered: available().map(t => t.name), ...(coalesced ? { coalescedSearches: coalesced } : {}), next: directMatches.length ? 'Call the named direct result_get/result_list tool now. No tool_invoke, discovery, or FIFO lease is needed.' : capabilityState?.state === 'unavailable' ? 'Capability exhausted for this turn. Advance to another task and label this one NOT TESTED; do not retry synonyms.' : 'Use a narrower server + verb + object query, or report unavailable. Do not invoke a rejected operation.', ...(event.isError ? { error: event.content } : {}) };
+        const marker = { discovery: deniedReason ? 'blocked' : capabilityState?.state === 'unavailable' ? 'unavailable' : directMatches.length ? 'direct' : rejected.length ? 'irrelevant' : event.isError ? 'failed' : 'empty', ...(deniedReason ? { blocked: { name: denied.tool.name, reason: deniedReason } } : {}), ...(capabilityState ? { capability: capabilityState.id, attempts: capabilityState.misses } : {}), ...(rejected.length ? { rejected } : {}), ...(directMatches.length ? { direct: directMatches } : {}), buffered: available().map(t => t.name), ...(coalesced ? { coalescedSearches: coalesced } : {}), next: deniedReason ? 'This operation exists but is not authorized for this turn. Do not retry it or infer server failure. Continue independent passive/read-only observations and mark active probing BLOCKED.' : directMatches.length ? 'Call the named direct result_get/result_list tool now. No tool_invoke, discovery, or FIFO lease is needed.' : capabilityState?.state === 'unavailable' ? 'Capability exhausted for this turn. Advance to another task and label this one NOT TESTED; do not retry synonyms.' : 'Use a narrower server + verb + object query, or report unavailable. Do not invoke a rejected operation.', ...(event.isError ? { error: event.content } : {}) };
         return { content: [{ type: 'text', text: JSON.stringify(marker) }], details: { atomicSchema: true, schemaCallId: event.toolCallId, loaded: [] }, isError: Boolean(event.isError) };
       }
       grantOrder ??= ++pendingSerial;

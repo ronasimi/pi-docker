@@ -9,6 +9,8 @@ export function capabilityForQuery(query) {
   if (/\b(openwrt|anansi|arachne|routers?)\b/.test(s)) return 'routers';
   if (/\b(mdns|ssdp|llmnr|multicast|bonjour)\b|\bpassive\b.*\b(network|scan|discovery|observation)\b/.test(s)) return 'passive_network';
   if (/\b(isolation|hairpin|proxy\s*arp|leakage)\b/.test(s)) return 'isolation';
+  if (/\b(?:perform network discovery|network discovery|discover hosts|host discovery|enumerate hosts|lan reconnaissance)\b/.test(s)) return 'network_discovery';
+  if (/\b(?:wireless|wifi|wi fi)\b/.test(s)) return 'wireless';
   if (/\b(subnet|topology|reflector)\b/.test(s)) return 'topology';
   if (/\bdocker\b.*\bimage\b/.test(s)) return 'docker_images';
   if (/\bdocker\b/.test(s)) return 'docker_containers';
@@ -24,6 +26,8 @@ export function capabilityForOperation(name) {
   if (/openwrt/.test(n)) return 'routers';
   if (/(?:mdns|ssdp|llmnr|multicast|passive|capture)/.test(n)) return 'passive_network';
   if (/(?:isolation|hairpin|proxy_arp)/.test(n)) return 'isolation';
+  if (/(?:perform_network_discovery|network_discover_hosts)/.test(n)) return 'network_discovery';
+  if (/(?:analyze_wireless_environment|wireless_analyze_environment)/.test(n)) return 'wireless';
   if (/(?:topology|subnet)/.test(n)) return 'topology';
   if (/docker.*image/.test(n)) return 'docker_images';
   if (/docker/.test(n)) return 'docker_containers';
@@ -37,6 +41,13 @@ export class CapabilityTracker {
   reset() { this.states = new Map(); }
   state(id) { return this.states.get(id) ?? { state: 'untried', misses: 0, reason: '' }; }
   unavailable(query) { const id = capabilityForQuery(query); return id && this.state(id).state === 'unavailable' ? { id, ...this.state(id) } : null; }
+  blocked(query, reason) {
+    const id = capabilityForQuery(query);
+    if (!id) return null;
+    const next = { state: 'unavailable', misses: this.maxMisses, reason: String(reason) };
+    this.states.set(id, next);
+    return { id, ...next };
+  }
   discovered(query, toolName) {
     const id = capabilityForQuery(query); if (!id) return null;
     const previous = this.state(id);
