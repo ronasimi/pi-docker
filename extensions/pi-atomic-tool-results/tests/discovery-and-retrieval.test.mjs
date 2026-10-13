@@ -115,3 +115,25 @@ test('Masscan requires runtime opt-in and scan intent; adding a tool or passive-
  } finally {if(old===undefined)delete process.env[variable];else process.env[variable]=old;}
 });
 
+
+test('network recon catalog discovery exposes policy denial without substituting unrelated tools',async()=>{
+  const f=harness();
+  const active={name:'mcp__security__perform_network_discovery',exposure:'deferred',description:'Discover LAN hosts with active ARP and ICMP probes',parameters:{type:'object',properties:{},'x-pi-effect':'active_probe'}};
+  const passive={name:'mcp__security__get_host_interface_info',exposure:'deferred',description:'Physical laptop interfaces and routes',parameters:{type:'object',properties:{}}};
+  f.tools.set(active.name,active);f.tools.set(passive.name,passive);
+  await f.emit('before_agent_start',{prompt:'network recon'});
+  const blockedQ={toolName:'tool_search',toolCallId:'active-search',input:{query:'mcp__security__perform_network_discovery'}};
+  await f.emit('tool_call',blockedQ);
+  const denied=await f.emit('tool_result',{...blockedQ,content:[],details:{loaded:['mcp__playwright__browser_network_request']}});
+  const deniedBody=JSON.parse(denied.content[0].text);
+  assert.equal(deniedBody.discovery,'blocked');
+  assert.equal(deniedBody.blocked.name,active.name);
+  assert.equal(deniedBody.tools,undefined);
+  assert.match(deniedBody.next,/passive\/read-only/);
+  const safeQ={toolName:'tool_search',toolCallId:'passive-search',input:{query:'mcp__security__get_host_interface_info'}};
+  await f.emit('tool_call',safeQ);
+  const available=await f.emit('tool_result',{...safeQ,content:[],details:{loaded:[]}});
+  const safeBody=JSON.parse(available.content[0].text);
+  assert.equal(safeBody.discovery,'ready');
+  assert.equal(safeBody.tools[0].name,passive.name);
+});
